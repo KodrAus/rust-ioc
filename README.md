@@ -14,6 +14,8 @@ You might notice that it contains exactly zero things, so it's not _really_ a co
 
 ## What does this actually do?
 
+Some [examples](https://github.com/KodrAus/rust-ioc/blob/master/src/main.rs).
+
 ### Basic factory usage
 
 Say we have a struct `X`, that has no dependencies. We can mark `X` as `Resolvable`, with a dependency on `()`:
