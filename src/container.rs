@@ -184,14 +184,17 @@ impl BasicScopedContainer {
         }
     }
 
+    #[inline]
     fn exists<T>(&self) -> bool where T: 'static {
         self.map.borrow().get::<K<T>>().is_some()
     }
 
+    #[inline]
     fn get<T>(&self) -> *mut T where T: 'static {
         self.map.borrow().get::<K<T>>().unwrap().as_ptr()
     }
 
+    #[inline]
     fn add<T>(&self, t: T) where T: 'static {
         self.map.borrow_mut().insert::<K<T>>(RefCell::new(t));
     }
