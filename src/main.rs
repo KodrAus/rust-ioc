@@ -76,13 +76,15 @@ impl<C, T> Resolvable<C> for XorY<T> {
 
 #[derive(Debug)]
 struct BorrowY<'a> {
-	y: &'a Y
+	x: X,
+	y: &'a Y,
 }
 impl<'a, C> Resolvable<C> for BorrowY<'a> {
-	type Dependency = B<'a, Y>;
+	type Dependency = (O<X>, B<'a, Y>);
 
-	fn resolve(y: Self::Dependency) -> Self {
+	fn resolve((x, y): Self::Dependency) -> Self {
 		BorrowY {
+			x: x.value(),
 			y: y.value()
 		}
 	}

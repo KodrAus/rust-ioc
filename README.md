@@ -74,7 +74,7 @@ impl<C> Resolvable<C> for Z {
 }
 ```
 
-Note that when specifying `Y` as a dependency we don't need to specify its dependencies again.
+Note that when specifying `Y` as a dependency we don't need to specify its dependencies again. Tuples are used for encapsulating multiple dependencies in a single type. For ergonomics, tuples of up to 5 elements are supported, but you can technically support `n` dependencies using nested tuples with 2 elements: `(A, (B, (C, D)))`.
 
 ### Polymorphism
 
