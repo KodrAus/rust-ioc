@@ -163,6 +163,11 @@ impl Scope for BasicContainer {
     }
 }
 
+/// A basic implementation of a scoped container.
+pub struct BasicScopedContainer {
+    map: RefCell<TypeMap>,
+}
+
 /// A type map key for dependencies.
 struct K<T> {
     _t: ::std::marker::PhantomData<T>
@@ -172,11 +177,8 @@ impl <T: 'static> Key for K<T> {
     type Value = RefCell<T>;
 }
 
-/// A basic implementation of a scoped container.
-pub struct BasicScopedContainer {
-    map: RefCell<TypeMap>,
-}
-
+// TODO: Remove need for T to be 'static
+// May mean using different key types, or using scope lifetime
 impl BasicScopedContainer {
     fn new() -> Self {
         BasicScopedContainer {
@@ -207,20 +209,15 @@ impl ScopedContainer for BasicScopedContainer {
     where T: Resolvable<Self, Dependency = D> + 'static,
           D: ResolvableFromContainer<'a, Self> 
     {
-        if self.exists::<K<T>>() {
-            unsafe {
-                self.get().as_ref().unwrap()
-            }
-        }
-        else {
+        if !self.exists::<K<T>>() {
             let d = D::resolve_from_container(self);
             let t = T::resolve(d);
 
             self.add(t);
+        }
 
-            unsafe {
-                self.get().as_ref().unwrap()
-            }
+        unsafe {
+            self.get().as_ref().unwrap()
         }
     }
 }

@@ -134,6 +134,8 @@ This is where things start to get interesting. Borrowed dependencies use a speci
 
 All dependencies borrowed for the lifetime of a scope will point to the same instance. For mutable dependencies, something like `Rc<RefCell>` is probably the best bet. I'm not sure how successful I'll be at building `&mut` dependencies.
 
+> Note: Dependencies more than 1 level deep with borrowed dependencies don't work right now. This is because the type map library is sane and requires `T: 'static`. A type is only `'static` if it has no borrowed references with a shorter lifetime. We'll probably have to try capture the lifetime of the scope and use that for _as good as static_.
+
 ## Flaws
 
 A lack of non-leaky polymorphism for dependencies is a bit of a downer, but static analysis of the dependency tree is kind of neat. Tradeoffs galore.
