@@ -73,12 +73,12 @@ impl<C, T> Resolvable<C> for XorY<T> {
 }
 
 #[derive(Debug)]
-struct BorrowY<'a> {
+struct BorrowY<'scope> {
     x: X,
-    y: &'a Y,
+    y: &'scope Y,
 }
-impl<'a, C> Resolvable<C> for BorrowY<'a> {
-    type Dependency = (O<X>, B<'a, Y>);
+impl<'scope, C> Resolvable<C> for BorrowY<'scope> {
+    type Dependency = (O<X>, B<'scope, Y>);
 
     fn resolve((x, y): Self::Dependency) -> Self {
         BorrowY {
@@ -89,11 +89,11 @@ impl<'a, C> Resolvable<C> for BorrowY<'a> {
 }
 
 #[derive(Debug)]
-struct BorrowMoreY<'a> {
-    y: &'a BorrowY<'a>,
+struct BorrowMoreY<'scope> {
+    y: &'scope BorrowY<'scope>,
 }
-impl<'a, C> Resolvable<C> for BorrowMoreY<'a> {
-    type Dependency = B<'a, BorrowY<'a>>;
+impl<'scope, C> Resolvable<C> for BorrowMoreY<'scope> {
+    type Dependency = B<'scope, BorrowY<'scope>>;
 
     fn resolve(y: Self::Dependency) -> Self {
         BorrowMoreY { y: y.value() }
@@ -122,10 +122,8 @@ fn main() {
     // Create a scope that can be used to resolve references.
     // Each B<'a, T> dependency will be the same instance for the lifetime of the scope.
     c.scope(|scope| {
-        let y: BorrowY = scope.resolve();
         let z: Z = scope.resolve();
 
-        // NOTE: The typemap requirement for T: 'static kills this
         let y: BorrowMoreY = scope.resolve();
 
         println!("{:?}", y);

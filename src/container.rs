@@ -1,4 +1,4 @@
-use std::any::{TypeId,Any};
+use std::any::{TypeId, Any};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -6,9 +6,9 @@ use std::collections::HashMap;
 pub trait Container
     where Self: Sized
 {
-    fn resolve<'a, D, R>(&'a self) -> R
+    fn resolve<'brw, D, R>(&'brw self) -> R
         where R: Resolvable<Self, Dependency = D>,
-              D: ResolvableFromContainer<'a, Self>
+              D: ResolvableFromContainer<'brw, Self>
     {
         let d = D::resolve_from_container(self);
 
@@ -17,30 +17,30 @@ pub trait Container
 }
 
 /// A trait for creating a new scope and using it within a closure.
-pub trait Scope<'a> {
-    type Container: ScopedContainer<'a>;
+pub trait Scope<'scope> {
+    type Container: ScopedContainer<'scope>;
 
     fn scope<F>(&self, f: F) where F: FnOnce(Self::Container) -> ();
 }
 
 /// A container that can can resolve dependencies for a given lifetime.
-pub trait ScopedContainer<'a>
+pub trait ScopedContainer<'scope>
     where Self: Container
 {
-    fn get_or_add<'b, T, D>(&'b self) -> &'a T
-        where 'a: 'b,
+    fn get_or_add<'brw, T, D>(&'brw self) -> &'scope T
+        where 'scope: 'brw,
               T: Resolvable<Self, Dependency = D>,
-              D: ResolvableFromContainer<'b, Self>;
+              D: ResolvableFromContainer<'brw, Self>;
 }
 
 /// A dependency that can be resolved directly from the container.
 ///
 /// This trait is different from `Resolvable` because it doesn't declare
 /// the type of the dependency the implementor requires.
-pub trait ResolvableFromContainer<'a, C>
+pub trait ResolvableFromContainer<'brw, C>
     where C: Container
 {
-    fn resolve_from_container(container: &'a C) -> Self;
+    fn resolve_from_container(container: &'brw C) -> Self;
 }
 
 /// A dependency that can be resolved.
@@ -51,10 +51,10 @@ pub trait Resolvable<C> {
 }
 
 /// `()` is a root dependency that has no dependencies of its own.
-impl<'a, C> ResolvableFromContainer<'a, C> for ()
+impl<'brw, C> ResolvableFromContainer<'brw, C> for ()
     where C: Container
 {
-    fn resolve_from_container(_: &'a C) -> Self {
+    fn resolve_from_container(_: &'brw C) -> Self {
         ()
     }
 }
@@ -63,19 +63,19 @@ impl<'a, C> ResolvableFromContainer<'a, C> for ()
 /// of their members.
 macro_rules! resolve_tuple {
     ($(($T:ident,$D:ident,$d:ident))*) => (
-        impl <'a, C $(,$T)*> ResolvableFromContainer<'a, C> for ($($T,)*)
-            where $($T: ResolvableFromContainer<'a, C>,)*
+        impl <'brw, C $(,$T)*> ResolvableFromContainer<'brw, C> for ($($T,)*)
+            where $($T: ResolvableFromContainer<'brw, C>,)*
                   C: Container
         {
-            fn resolve_from_container(container: &'a C) -> Self {
+            fn resolve_from_container(container: &'brw C) -> Self {
                 (
                     $($T::resolve_from_container(container),)*
                 )
             }
         }
 
-        impl <'a, C $(,$T,$D)*> Resolvable<C> for ($($T,)*)
-            where $($T: Resolvable<C, Dependency = $D>, $D: ResolvableFromContainer<'a, C>,)*
+        impl <'brw, C $(,$T,$D)*> Resolvable<C> for ($($T,)*)
+            where $($T: Resolvable<C, Dependency = $D>, $D: ResolvableFromContainer<'brw, C>,)*
                   C: Container
         {
             type Dependency = ($($D,)*);
@@ -109,10 +109,10 @@ impl<T> O<T> {
     }
 }
 
-impl<'a, C, T, D> Resolvable<C> for O<T>
+impl<'brw, C, T, D> Resolvable<C> for O<T>
     where C: Container,
           T: Resolvable<C, Dependency = D>,
-          D: ResolvableFromContainer<'a, C>
+          D: ResolvableFromContainer<'brw, C>
 {
     type Dependency = D;
 
@@ -121,35 +121,35 @@ impl<'a, C, T, D> Resolvable<C> for O<T>
     }
 }
 
-impl<'a, C, T, D> ResolvableFromContainer<'a, C> for O<T>
+impl<'brw, C, T, D> ResolvableFromContainer<'brw, C> for O<T>
     where C: Container,
           T: Resolvable<C, Dependency = D>,
-          D: ResolvableFromContainer<'a, C>
+          D: ResolvableFromContainer<'brw, C>
 {
-    fn resolve_from_container(container: &'a C) -> Self {
+    fn resolve_from_container(container: &'brw C) -> Self {
         let d = D::resolve_from_container(container);
         O { t: T::resolve(d) }
     }
 }
 
 /// A root dependency that wraps some other borrowed dependency type.
-pub struct B<'a, T: 'a> {
-    t: &'a T,
+pub struct B<'scope, T: 'scope> {
+    t: &'scope T,
 }
 
-impl<'a, T> B<'a, T> {
-    pub fn value(self) -> &'a T {
+impl<'scope, T> B<'scope, T> {
+    pub fn value(self) -> &'scope T {
         self.t
     }
 }
 
-impl<'a, 'b, C, T, D> ResolvableFromContainer<'b, C> for B<'a, T>
-    where 'a: 'b,
-          C: ScopedContainer<'a>,
+impl<'scope, 'brw, C, T, D> ResolvableFromContainer<'brw, C> for B<'scope, T>
+    where 'scope: 'brw,
+          C: ScopedContainer<'scope>,
           T: Resolvable<C, Dependency = D>,
-          D: ResolvableFromContainer<'b, C>
+          D: ResolvableFromContainer<'brw, C>
 {
-    fn resolve_from_container(container: &'b C) -> Self {
+    fn resolve_from_container(container: &'brw C) -> Self {
         B { t: container.get_or_add() }
     }
 }
@@ -160,9 +160,8 @@ pub struct BasicContainer;
 
 impl Container for BasicContainer {}
 
-impl <'a> Scope<'a> for BasicContainer {
-    // NOTE: With ATC for lifetimes this would work for BasicScopedContainer<'a>
-    type Container = BasicScopedContainer<'a>;
+impl<'scope> Scope<'scope> for BasicContainer {
+    type Container = BasicScopedContainer<'scope>;
 
     fn scope<F>(&self, f: F)
         where F: FnOnce(Self::Container) -> ()
@@ -173,15 +172,13 @@ impl <'a> Scope<'a> for BasicContainer {
     }
 }
 
-struct TypeMap<'a> {
-    refs: HashMap<TypeId, Box<Any + 'a>>
+struct TypeMap<'scope> {
+    refs: HashMap<TypeId, Box<Any + 'scope>>,
 }
 
-impl <'a> TypeMap<'a> {
+impl<'scope> TypeMap<'scope> {
     pub fn new() -> Self {
-        TypeMap {
-            refs: HashMap::new()
-        }
+        TypeMap { refs: HashMap::new() }
     }
 
     fn key<T>() -> TypeId {
@@ -192,53 +189,52 @@ impl <'a> TypeMap<'a> {
         self.refs.get(&Self::key::<T>()).is_some()
     }
 
-    unsafe fn get_raw<T>(&self) -> *const T {
-        (&**self.refs.get(&Self::key::<T>()).unwrap()) as *const Any as *const T
+    unsafe fn get<T>(&self) -> *const T {
+        &**self.refs.get(&Self::key::<T>()).unwrap() as *const Any as *const T
     }
 
-    fn insert<T>(&mut self, t: T) where T: 'a {
-        let k = Self::key::<T>();
-
-        self.refs.insert(k, Box::new(t));
+    fn insert<T>(&mut self, t: T)
+        where T: 'scope
+    {
+        self.refs.insert(Self::key::<T>(), Box::new(t));
     }
 }
 
 /// A basic implementation of a scoped container.
-pub struct BasicScopedContainer<'a> {
-    map: RefCell<TypeMap<'a>>,
+pub struct BasicScopedContainer<'scope> {
+    map: RefCell<TypeMap<'scope>>,
 }
 
-impl <'a> BasicScopedContainer<'a> {
+impl<'scope> BasicScopedContainer<'scope> {
     fn new() -> Self {
         BasicScopedContainer { map: RefCell::new(TypeMap::new()) }
     }
 
     #[inline]
-    fn exists<T>(&self) -> bool
-    {
+    fn exists<T>(&self) -> bool {
         self.map.borrow().exists::<T>()
     }
 
     #[inline]
-    unsafe fn get<T>(&self) -> *const T
-    {
-        self.map.borrow().get_raw::<T>()
+    unsafe fn get<T>(&self) -> *const T {
+        self.map.borrow().get::<T>()
     }
 
     #[inline]
-    fn add<T>(&self, t: T) where T: 'a
+    fn add<T>(&self, t: T)
+        where T: 'scope
     {
         self.map.borrow_mut().insert::<T>(t);
     }
 }
 
-impl <'a> Container for BasicScopedContainer<'a> {}
+impl<'scope> Container for BasicScopedContainer<'scope> {}
 
-impl <'a> ScopedContainer<'a> for BasicScopedContainer<'a> {
-    fn get_or_add<'b, T, D>(&'b self) -> &'a T
-        where 'a: 'b,
+impl<'scope> ScopedContainer<'scope> for BasicScopedContainer<'scope> {
+    fn get_or_add<'brw, T, D>(&'brw self) -> &'scope T
+        where 'scope: 'brw,
               T: Resolvable<Self, Dependency = D>,
-              D: ResolvableFromContainer<'b, Self>
+              D: ResolvableFromContainer<'brw, Self>
     {
         if !self.exists::<T>() {
             let d = D::resolve_from_container(self);
