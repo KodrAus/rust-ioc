@@ -1,5 +1,7 @@
 # Injector Factories for Rust
 
+> NOTE: This repo won't build on mainline Rust. I'm using a [slightly tweaked `Any` trait](https://github.com/KodrAus/rust/commit/16c1e8fe5c7eeab07915ed89884d1e76daf6b6f2) that doesn't require a `'static` lifetime.
+
 This is a sandbox for playing around with some dependency injection ideas in the [Rust programming language](https://www.rust-lang-org). Upfront let's not call this _inversion of control_ or _dependency injection_ because it lacks many of the fundamental features of a proper ioc container. What's currently there is a _very_ basic factory pattern that can be used to declare and inject owned or borrowed dependencies without having to know about their dependencies.
 
 The dependency tree is verified at compile-time, and Rust will helpfully blow up for you if it encounters circular references. All resolution is statically dispatched.
@@ -133,8 +135,6 @@ BasicContainer.scope(|scope| {
 This is where things start to get interesting. Borrowed dependencies use a special container that implements `ScopedContainer`. The `ScopedContainer` has a `TypeMap` of dependencies so it can hand out borrowed references to them.
 
 All dependencies borrowed for the lifetime of a scope will point to the same instance. For mutable dependencies, something like `Rc<RefCell>` is probably the best bet. I'm not sure how successful I'll be at building `&mut` dependencies.
-
-> Note: Dependencies more than 1 level deep with borrowed dependencies don't work right now. This is because the type map library is sane and requires `T: 'static`. A type is only `'static` if it has no borrowed references with a shorter lifetime. We'll probably have to try capture the lifetime of the scope and use that for _as good as static_.
 
 ## Flaws
 
