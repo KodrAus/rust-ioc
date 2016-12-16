@@ -1,5 +1,6 @@
+use std::any::{TypeId,Any};
 use std::cell::RefCell;
-use typemap::{TypeMap, Key};
+use std::collections::HashMap;
 
 /// A container that can resolve dependencies.
 pub trait Container
@@ -16,19 +17,20 @@ pub trait Container
 }
 
 /// A trait for creating a new scope and using it within a closure.
-pub trait Scope {
-    type Container: ScopedContainer;
+pub trait Scope<'a> {
+    type Container: ScopedContainer<'a>;
 
     fn scope<F>(&self, f: F) where F: FnOnce(Self::Container) -> ();
 }
 
 /// A container that can can resolve dependencies for a given lifetime.
-pub trait ScopedContainer
+pub trait ScopedContainer<'a>
     where Self: Container
 {
-    fn get_or_add<'a, T, D>(&'a self) -> &'a T
-        where T: Resolvable<Self, Dependency = D> + 'static,
-              D: ResolvableFromContainer<'a, Self>;
+    fn get_or_add<'b, T, D>(&'b self) -> &'a T
+        where 'a: 'b,
+              T: Resolvable<Self, Dependency = D>,
+              D: ResolvableFromContainer<'b, Self>;
 }
 
 /// A dependency that can be resolved directly from the container.
@@ -141,12 +143,13 @@ impl<'a, T> B<'a, T> {
     }
 }
 
-impl<'a, C, T, D> ResolvableFromContainer<'a, C> for B<'a, T>
-    where C: ScopedContainer,
-          T: Resolvable<C, Dependency = D> + 'static,
-          D: ResolvableFromContainer<'a, C>
+impl<'a, 'b, C, T, D> ResolvableFromContainer<'b, C> for B<'a, T>
+    where 'a: 'b,
+          C: ScopedContainer<'a>,
+          T: Resolvable<C, Dependency = D>,
+          D: ResolvableFromContainer<'b, C>
 {
-    fn resolve_from_container(container: &'a C) -> Self {
+    fn resolve_from_container(container: &'b C) -> Self {
         B { t: container.get_or_add() }
     }
 }
@@ -157,8 +160,9 @@ pub struct BasicContainer;
 
 impl Container for BasicContainer {}
 
-impl Scope for BasicContainer {
-    type Container = BasicScopedContainer;
+impl <'a> Scope<'a> for BasicContainer {
+    // NOTE: With ATC for lifetimes this would work for BasicScopedContainer<'a>
+    type Container = BasicScopedContainer<'a>;
 
     fn scope<F>(&self, f: F)
         where F: FnOnce(Self::Container) -> ()
@@ -169,58 +173,74 @@ impl Scope for BasicContainer {
     }
 }
 
+struct TypeMap<'a> {
+    refs: HashMap<TypeId, Box<Any + 'a>>
+}
+
+impl <'a> TypeMap<'a> {
+    pub fn new() -> Self {
+        TypeMap {
+            refs: HashMap::new()
+        }
+    }
+
+    fn key<T>() -> TypeId {
+        TypeId::of::<T>()
+    }
+
+    fn exists<T>(&self) -> bool {
+        self.refs.get(&Self::key::<T>()).is_some()
+    }
+
+    unsafe fn get_raw<T>(&self) -> *const T {
+        (&**self.refs.get(&Self::key::<T>()).unwrap()) as *const Any as *const T
+    }
+
+    fn insert<T>(&mut self, t: T) where T: 'a {
+        let k = Self::key::<T>();
+
+        self.refs.insert(k, Box::new(t));
+    }
+}
+
 /// A basic implementation of a scoped container.
-pub struct BasicScopedContainer {
-    map: RefCell<TypeMap>,
+pub struct BasicScopedContainer<'a> {
+    map: RefCell<TypeMap<'a>>,
 }
 
-/// A type map key for dependencies.
-struct K<T> {
-    _t: ::std::marker::PhantomData<T>,
-}
-
-// TODO: Remove need for T to be 'static
-// May mean using different key types, or using scope lifetime
-// Or boxing on the heap instead of a RefCell
-impl<T: 'static> Key for K<T> {
-    type Value = RefCell<T>;
-}
-
-impl BasicScopedContainer {
+impl <'a> BasicScopedContainer<'a> {
     fn new() -> Self {
         BasicScopedContainer { map: RefCell::new(TypeMap::new()) }
     }
 
     #[inline]
     fn exists<T>(&self) -> bool
-        where T: 'static
     {
-        self.map.borrow().get::<K<T>>().is_some()
+        self.map.borrow().exists::<T>()
     }
 
     #[inline]
-    fn get<T>(&self) -> *mut T
-        where T: 'static
+    unsafe fn get<T>(&self) -> *const T
     {
-        self.map.borrow().get::<K<T>>().unwrap().as_ptr()
+        self.map.borrow().get_raw::<T>()
     }
 
     #[inline]
-    fn add<T>(&self, t: T)
-        where T: 'static
+    fn add<T>(&self, t: T) where T: 'a
     {
-        self.map.borrow_mut().insert::<K<T>>(RefCell::new(t));
+        self.map.borrow_mut().insert::<T>(t);
     }
 }
 
-impl Container for BasicScopedContainer {}
+impl <'a> Container for BasicScopedContainer<'a> {}
 
-impl ScopedContainer for BasicScopedContainer {
-    fn get_or_add<'a, T, D>(&'a self) -> &'a T
-        where T: Resolvable<Self, Dependency = D> + 'static,
-              D: ResolvableFromContainer<'a, Self>
+impl <'a> ScopedContainer<'a> for BasicScopedContainer<'a> {
+    fn get_or_add<'b, T, D>(&'b self) -> &'a T
+        where 'a: 'b,
+              T: Resolvable<Self, Dependency = D>,
+              D: ResolvableFromContainer<'b, Self>
     {
-        if !self.exists::<K<T>>() {
+        if !self.exists::<T>() {
             let d = D::resolve_from_container(self);
             let t = T::resolve(d);
 

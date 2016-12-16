@@ -1,4 +1,4 @@
-extern crate typemap;
+// NOTE: Working with a fork of libcore where Any doesn't have to be static
 
 mod container;
 use container::*;
@@ -126,7 +126,7 @@ fn main() {
         let z: Z = scope.resolve();
 
         // NOTE: The typemap requirement for T: 'static kills this
-        // let y: BorrowMoreY = scope.resolve();
+        let y: BorrowMoreY = scope.resolve();
 
         println!("{:?}", y);
         println!("{:?}", z);
