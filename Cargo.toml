@@ -3,8 +3,12 @@ name = "ioc"
 version = "0.1.0"
 authors = ["Ashley Mannix <ashleymannix@live.com.au>"]
 
+[profile.release]
+debug = true
+
 [features]
 default = ["non-static-type-id"]
 non-static-type-id = []
 
 [dependencies]
+fnv = "*"

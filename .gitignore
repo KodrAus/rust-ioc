@@ -1,2 +1,5 @@
 *.bk
 target
+
+perf.data
+flame.svg

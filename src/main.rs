@@ -1,4 +1,6 @@
-// NOTE: Working with a fork of libcore where Any doesn't have to be static
+// NOTE: Working with a fork of libcore where TypeId doesn't have to be static
+
+extern crate fnv;
 
 mod container;
 use container::*;

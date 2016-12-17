@@ -28,7 +28,7 @@ impl<C> Resolvable<C> for Y {
 }
 
 #[bench]
-fn resolve_owned_y(b: &mut Bencher) {
+pub fn resolve_owned_y(b: &mut Bencher) {
 	let c = BasicContainer;
 
 	b.iter(|| {
@@ -55,7 +55,7 @@ impl<'scope, C> Resolvable<C> for BorrowY<'scope> {
 }
 
 #[bench]
-fn resolve_brwd_y_first(b: &mut Bencher) {
+pub fn resolve_brwd_y_first(b: &mut Bencher) {
 	let c = BasicContainer;
 
 	b.iter(|| {
@@ -68,7 +68,7 @@ fn resolve_brwd_y_first(b: &mut Bencher) {
 }
 
 #[bench]
-fn resolve_brwd_y_subsequent(b: &mut Bencher) {
+pub fn resolve_brwd_y_subsequent(b: &mut Bencher) {
 	let scope = Scoped::new();
 
 	b.iter(|| {

@@ -4,7 +4,11 @@ use super::*;
 
 use std::any::TypeId;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::HashMap as StdHashMap;
+use std::hash::BuildHasherDefault;
+use fnv::FnvHasher;
+
+type HashMap<K, V> = StdHashMap<K, V, BuildHasherDefault<FnvHasher>>;
 
 pub trait Any {}
 impl<T: ?Sized> Any for T {}
@@ -15,7 +19,7 @@ struct TypeMap<'scope> {
 
 impl<'scope> TypeMap<'scope> {
     pub fn new() -> Self {
-        TypeMap { refs: HashMap::new() }
+        TypeMap { refs: HashMap::default() }
     }
 
     fn key<T>() -> TypeId {

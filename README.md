@@ -1,6 +1,6 @@
 # Injector Factories for Rust
 
-> NOTE: This repo won't build on mainline Rust. I'm using a [slightly tweaked `Any` trait](https://github.com/KodrAus/rust/commit/16c1e8fe5c7eeab07915ed89884d1e76daf6b6f2) that doesn't require a `'static` lifetime.
+> NOTE: This repo won't build on mainline Rust. I'm using a [slightly tweaked `TypeId` trait](https://github.com/KodrAus/rust/commit/16c1e8fe5c7eeab07915ed89884d1e76daf6b6f2) that doesn't require a `'static` lifetime.
 
 This is a sandbox for playing around with some dependency injection ideas in the [Rust programming language](https://www.rust-lang-org). Upfront let's not call this _inversion of control_ or _dependency injection_ because it lacks many of the fundamental features of a proper ioc container. What's currently there is a _very_ basic factory pattern that can be used to declare and inject owned or borrowed dependencies without having to know about their dependencies.
 
@@ -135,6 +135,19 @@ BasicContainer.scope(|scope| {
 This is where things start to get interesting. Borrowed dependencies use a special container that implements `ScopedContainer`. The `ScopedContainer` has a `TypeMap` of dependencies so it can hand out borrowed references to them.
 
 All dependencies borrowed for the lifetime of a scope will point to the same instance. For mutable dependencies, something like `Rc<RefCell>` is probably the best bet. I'm not sure how successful I'll be at building `&mut` dependencies.
+
+## Performance
+
+Everything is static dispatch so optimisations abound. Injecting `O<T>` is a _zero-cost abstraction_. For borrowed or scoped dependencies, the cost is in hashing.
+
+I forget this every time so am listing the steps I'm using for benchmarking:
+
+```shell
+$ cargo bench --no-run
+$ perf record -g target/release/mod-* --bench the_bench_to_run
+$ perf script | rust-unmangle | stackcollapse-perf.pl | flamegraph.pl > flame.svg
+$ firefox flame.svg
+```
 
 ## Flaws
 
