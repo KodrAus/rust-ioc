@@ -104,7 +104,7 @@ fn main() {
     // A basic container for only owned resources.
     let c = BasicContainer;
 
-    let x: X = BasicContainer.resolve();
+    let x: X = c.resolve();
     let xy: (X, Y) = c.resolve();
     let z: Z = c.resolve();
     let xyz: XYZ = c.resolve();
