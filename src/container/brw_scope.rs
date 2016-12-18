@@ -73,7 +73,7 @@ impl<'scope> Scoped<'scope> {
 
 impl<'scope> Container for Scoped<'scope> {}
 
-impl<'scope> ScopedContainer<'scope> for Scoped<'scope> {
+impl<'scope> ScopedContainer for Scoped<'scope> {
     fn get_or_add<T, D>(&self) -> T
         where T: Resolvable<Self, Dependency = D> + Clone + 'static,
               D: ResolvableFromContainer<Self>
@@ -90,8 +90,9 @@ impl<'scope> ScopedContainer<'scope> for Scoped<'scope> {
 }
 
 impl<'scope> BrwScopedContainer<'scope> for Scoped<'scope> {
-    fn brw_or_add<T, D>(&self) -> &'scope T
-        where T: Resolvable<Self, Dependency = D>,
+    fn brw_or_add<'brw, T, D>(&self) -> &'brw T
+        where 'scope: 'brw,
+              T: Resolvable<Self, Dependency = D> + 'scope,
               D: ResolvableFromContainer<Self>
     {
         if !self.exists::<T>() {

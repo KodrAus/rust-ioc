@@ -20,13 +20,13 @@ pub trait Container
 
 /// A trait for creating a new scope and using it within a closure.
 pub trait Scope<'scope> {
-    type Container: ScopedContainer<'scope>;
+    type Container: Container;
 
-    fn scope<F>(&self, f: F) where F: FnOnce(Self::Container) -> ();
+    fn scope<F, T>(&self, f: F) -> T where F: FnOnce(Self::Container) -> T;
 }
 
 /// A scoped container that can resolve shared dependencies.
-pub trait ScopedContainer<'scope>
+pub trait ScopedContainer
     where Self: Container
 {
     fn get_or_add<T, D>(&self) -> T
@@ -36,10 +36,11 @@ pub trait ScopedContainer<'scope>
 
 /// A container that can resolve shared dependencies through borrowing.
 pub trait BrwScopedContainer<'scope>
-    where Self: ScopedContainer<'scope> + Container
+    where Self: Container
 {
-    fn brw_or_add<T, D>(&self) -> &'scope T
-        where T: Resolvable<Self, Dependency = D>,
+    fn brw_or_add<'brw, T, D>(&self) -> &'brw T
+        where 'scope: 'brw,
+              T: Resolvable<Self, Dependency = D> + 'scope,
               D: ResolvableFromContainer<Self>;
 }
 
@@ -68,12 +69,12 @@ impl Container for BasicContainer {}
 
 impl<'scope> Scope<'scope> for BasicContainer {
     type Container = Scoped<'scope>;
-
-    fn scope<F>(&self, f: F)
-        where F: FnOnce(Self::Container) -> ()
+    
+    fn scope<F, T>(&self, f: F) -> T
+        where F: FnOnce(Self::Container) -> T
     {
         let scope = Scoped::new();
 
-        f(scope);
+        f(scope)
     }
 }
