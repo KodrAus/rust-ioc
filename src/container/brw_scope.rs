@@ -2,13 +2,22 @@
 
 use super::*;
 
-use std::any::TypeId;
+use std::intrinsics;
 use std::cell::RefCell;
 use std::collections::HashMap as StdHashMap;
 use std::hash::BuildHasherDefault;
 use fnv::FnvHasher;
 
 type HashMap<K, V> = StdHashMap<K, V, BuildHasherDefault<FnvHasher>>;
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct TypeId(u64);
+
+impl TypeId {
+    fn of<T: ?Sized>() -> Self {
+        TypeId(unsafe { intrinsics::type_id::<T>() })
+    }
+}
 
 pub trait Any {}
 impl<T: ?Sized> Any for T {}

@@ -69,7 +69,7 @@ impl Container for BasicContainer {}
 
 impl<'scope> Scope<'scope> for BasicContainer {
     type Container = Scoped<'scope>;
-    
+
     fn scope<F, T>(&self, f: F) -> T
         where F: FnOnce(Self::Container) -> T
     {

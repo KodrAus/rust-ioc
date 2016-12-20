@@ -1,3 +1,5 @@
+#![feature(core_intrinsics)]
+
 // NOTE: Working with a fork of libcore where TypeId doesn't have to be static
 
 extern crate fnv;
