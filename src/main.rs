@@ -104,6 +104,22 @@ impl<'scope, C> Resolvable<C> for BorrowMoreY<'scope> {
     }
 }
 
+#[derive(Debug)]
+struct Unsound {
+    x: X,
+    y: &'static Y,
+}
+impl<C> Resolvable<C> for Unsound {
+    type Dependency = (O<X>, B<'static, Y>);
+
+    fn resolve((x, y): Self::Dependency) -> Self {
+        Unsound {
+            x: x.value(),
+            y: y.value(),
+        }
+    }
+}
+
 fn main() {
     // A basic container for only owned resources.
     let c = BasicContainer;
@@ -130,7 +146,15 @@ fn main() {
 
         let y: BorrowMoreY = scope.resolve();
 
+        // UNSOUND: borrow with a static dependency
+        //let u: Unsound = scope.resolve();
+
         println!("{:?}", y);
         println!("{:?}", z);
     });
+
+    let scope = Scoped::new();
+
+    // UNSOUND: resolve a static dependency
+    //let x: &'static X = scope.brw_or_add();
 }

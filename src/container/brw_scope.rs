@@ -19,7 +19,7 @@ impl TypeId {
     }
 }
 
-pub trait Any {}
+trait Any {}
 impl<T: ?Sized> Any for T {}
 
 struct TypeMap<'scope> {
@@ -39,10 +39,14 @@ impl<'scope> TypeMap<'scope> {
         self.refs.get(&Self::key::<T>()).is_some()
     }
 
-    unsafe fn get<T>(&self) -> *const T {
+    unsafe fn get_ptr<T>(&self) -> *const T {
         let ptr = self.refs.get(&Self::key::<T>()).unwrap();
 
         &**ptr as *const Any as *const T
+    }
+
+    fn get<'a, T>(&self) -> &'a T {
+        unsafe { self.get_ptr().as_ref().unwrap() }
     }
 
     fn insert<T>(&mut self, t: T)
@@ -68,7 +72,7 @@ impl<'scope> Scoped<'scope> {
     }
 
     #[inline]
-    unsafe fn get<T>(&self) -> *const T {
+    fn get<'a, T>(&self) -> &'a T {
         self.map.borrow().get::<T>()
     }
 
@@ -82,10 +86,10 @@ impl<'scope> Scoped<'scope> {
 
 impl<'scope> Container for Scoped<'scope> {}
 
-impl<'scope> ScopedContainer for Scoped<'scope> {
-    fn get_or_add<T, D>(&self) -> T
+impl<'scope> ScopedContainer<'scope> for Scoped<'scope> {
+    fn get_or_add<T, D>(&'scope self) -> T
         where T: Resolvable<Self, Dependency = D> + Clone + 'static,
-              D: ResolvableFromContainer<Self>
+              D: ResolvableFromContainer<'scope, Self>
     {
         if !self.exists::<T>() {
             let d = D::resolve_from_container(self);
@@ -94,15 +98,17 @@ impl<'scope> ScopedContainer for Scoped<'scope> {
             self.add(t);
         }
 
-        unsafe { (*self.get::<T>()).clone() }
+        (*self.get::<T>()).clone()
     }
 }
 
+// NOTE: the 'brw here probably isn't soing much, since the T
+// to resolve needs to live for 'scope anyway
 impl<'scope> BrwScopedContainer<'scope> for Scoped<'scope> {
-    fn brw_or_add<'brw, T, D>(&self) -> &'brw T
+    fn brw_or_add<'brw, T, D>(&'brw self) -> &'brw T
         where 'scope: 'brw,
               T: Resolvable<Self, Dependency = D> + 'scope,
-              D: ResolvableFromContainer<Self>
+              D: ResolvableFromContainer<'brw, Self>
     {
         if !self.exists::<T>() {
             let d = D::resolve_from_container(self);
@@ -111,6 +117,6 @@ impl<'scope> BrwScopedContainer<'scope> for Scoped<'scope> {
             self.add(t);
         }
 
-        unsafe { self.get().as_ref().unwrap() }
+        self.get()
     }
 }

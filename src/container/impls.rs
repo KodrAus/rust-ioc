@@ -1,7 +1,7 @@
 use super::*;
 
 /// `()` is a root dependency that has no dependencies of its own.
-impl<C> ResolvableFromContainer<C> for ()
+impl<'scope, C> ResolvableFromContainer<'scope, C> for ()
     where C: Container
 {
     fn resolve_from_container(_: &C) -> Self {
@@ -13,19 +13,19 @@ impl<C> ResolvableFromContainer<C> for ()
 /// of their members.
 macro_rules! resolve_tuple {
     ($(($T:ident,$D:ident,$d:ident))*) => (
-        impl <C $(,$T)*> ResolvableFromContainer<C> for ($($T,)*)
-            where $($T: ResolvableFromContainer<C>,)*
+        impl <'scope, C $(,$T)*> ResolvableFromContainer<'scope, C> for ($($T,)*)
+            where $($T: ResolvableFromContainer<'scope, C>,)*
                   C: Container
         {
-            fn resolve_from_container(container: &C) -> Self {
+            fn resolve_from_container(container: &'scope C) -> Self {
                 (
                     $($T::resolve_from_container(container),)*
                 )
             }
         }
 
-        impl <C $(,$T,$D)*> Resolvable<C> for ($($T,)*)
-            where $($T: Resolvable<C, Dependency = $D>, $D: ResolvableFromContainer<C>,)*
+        impl <'scope, C $(,$T,$D)*> Resolvable<C> for ($($T,)*)
+            where $($T: Resolvable<C, Dependency = $D>, $D: ResolvableFromContainer<'scope, C>,)*
                   C: Container
         {
             type Dependency = ($($D,)*);
@@ -59,10 +59,10 @@ impl<T> O<T> {
     }
 }
 
-impl<C, T, D> Resolvable<C> for O<T>
+impl<'scope, C, T, D> Resolvable<C> for O<T>
     where C: Container,
           T: Resolvable<C, Dependency = D>,
-          D: ResolvableFromContainer<C>
+          D: ResolvableFromContainer<'scope, C>
 {
     type Dependency = D;
 
@@ -71,12 +71,12 @@ impl<C, T, D> Resolvable<C> for O<T>
     }
 }
 
-impl<C, T, D> ResolvableFromContainer<C> for O<T>
+impl<'scope, C, T, D> ResolvableFromContainer<'scope, C> for O<T>
     where C: Container,
           T: Resolvable<C, Dependency = D>,
-          D: ResolvableFromContainer<C>
+          D: ResolvableFromContainer<'scope, C>
 {
-    fn resolve_from_container(container: &C) -> Self {
+    fn resolve_from_container(container: &'scope C) -> Self {
         let d = D::resolve_from_container(container);
         O { t: T::resolve(d) }
     }
@@ -93,12 +93,12 @@ impl<'scope, T> B<'scope, T> {
     }
 }
 
-impl<'scope, C, T, D> ResolvableFromContainer<C> for B<'scope, T>
+impl<'scope, C, T, D> ResolvableFromContainer<'scope, C> for B<'scope, T>
     where C: BrwScopedContainer<'scope>,
           T: Resolvable<C, Dependency = D>,
-          D: ResolvableFromContainer<C>
+          D: ResolvableFromContainer<'scope, C>
 {
-    fn resolve_from_container(container: &C) -> Self {
+    fn resolve_from_container(container: &'scope C) -> Self {
         B { t: container.brw_or_add() }
     }
 }
