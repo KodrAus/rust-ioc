@@ -1,6 +1,6 @@
 # Injector Factories for Rust
 
-> NOTE: This repo won't build on mainline Rust. I'm using a [slightly tweaked `TypeId` trait](https://github.com/KodrAus/rust/commit/16c1e8fe5c7eeab07915ed89884d1e76daf6b6f2) that doesn't require a `'static` lifetime.
+> NOTE: This repo won't build on mainline Rust. I'm using a [slightly tweaked `type_id` intrinsic](https://github.com/KodrAus/rust/commit/535d52bae789501bb3b5f0a5d2161cf248c43cd3) that doesn't require a `'static` lifetime.
 
 This is a sandbox for playing around with some dependency injection ideas in the [Rust programming language](https://www.rust-lang-org). Upfront let's not call this _inversion of control_ or _dependency injection_ because it lacks many of the fundamental features of a proper ioc container. What's currently there is a _very_ basic factory pattern that can be used to declare and inject owned or borrowed dependencies without having to know about their dependencies.
 
