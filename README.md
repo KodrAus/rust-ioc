@@ -12,6 +12,8 @@ This is currently unsound (actually it fails to build, to avoid being unsound). 
 
 Just use `Rc<T>` as the unit for shared data instead of `&T`. It solves all of the issues around fudging lifetimes that are too short or too long. It's not like it's that expensive.
 
+## The gist of it
+
 The dependency tree is verified at compile-time, and Rust will helpfully blow up for you if it encounters circular references. All resolution is statically dispatched.
 
 All paths must eventually end with a `()` dependency, so the container doesn't need any additional state to get started. Speaking of the container, here's the definition for the basic implementation:
