@@ -4,6 +4,14 @@
 
 This is a sandbox for playing around with some dependency injection ideas in the [Rust programming language](https://www.rust-lang-org). Upfront let's not call this _inversion of control_ or _dependency injection_ because it lacks many of the fundamental features of a proper ioc container. What's currently there is a _very_ basic factory pattern that can be used to declare and inject owned or borrowed dependencies without having to know about their dependencies.
 
+## Soundness
+
+This is currently unsound (actually it fails to build, to avoid being unsound). Unless you have a piece of data with a lifetime to ties things down with it's possible to request a reference that outlives the container. Bad.
+
+### The pragmatic solution
+
+Just use `Rc<T>` as the unit for shared data instead of `&T`. It solves all of the issues around fudging lifetimes that are too short or too long. It's not like it's that expensive.
+
 The dependency tree is verified at compile-time, and Rust will helpfully blow up for you if it encounters circular references. All resolution is statically dispatched.
 
 All paths must eventually end with a `()` dependency, so the container doesn't need any additional state to get started. Speaking of the container, here's the definition for the basic implementation:

@@ -102,7 +102,7 @@ impl<'scope> ScopedContainer<'scope> for Scoped<'scope> {
     }
 }
 
-// NOTE: the 'brw here probably isn't soing much, since the T
+// NOTE: the 'brw here probably isn't doing much, since the T
 // to resolve needs to live for 'scope anyway
 impl<'scope> BrwScopedContainer<'scope> for Scoped<'scope> {
     fn brw_or_add<'brw, T, D>(&'brw self) -> &'brw T
