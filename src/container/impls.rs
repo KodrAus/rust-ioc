@@ -1,7 +1,9 @@
+use std::ops::Deref;
+use std::rc::Rc;
 use super::*;
 
 /// `()` is a root dependency that has no dependencies of its own.
-impl<'scope, C> ResolvableFromContainer<'scope, C> for ()
+impl<C> ResolvableFromContainer<C> for ()
     where C: Container
 {
     fn resolve_from_container(_: &C) -> Self {
@@ -13,19 +15,19 @@ impl<'scope, C> ResolvableFromContainer<'scope, C> for ()
 /// of their members.
 macro_rules! resolve_tuple {
     ($(($T:ident,$D:ident,$d:ident))*) => (
-        impl <'scope, C $(,$T)*> ResolvableFromContainer<'scope, C> for ($($T,)*)
-            where $($T: ResolvableFromContainer<'scope, C>,)*
+        impl <C $(,$T)*> ResolvableFromContainer<C> for ($($T,)*)
+            where $($T: ResolvableFromContainer<C>,)*
                   C: Container
         {
-            fn resolve_from_container(container: &'scope C) -> Self {
+            fn resolve_from_container(container: &C) -> Self {
                 (
                     $($T::resolve_from_container(container),)*
                 )
             }
         }
 
-        impl <'scope, C $(,$T,$D)*> Resolvable<C> for ($($T,)*)
-            where $($T: Resolvable<C, Dependency = $D>, $D: ResolvableFromContainer<'scope, C>,)*
+        impl <C $(,$T,$D)*> Resolvable<C> for ($($T,)*)
+            where $($T: Resolvable<C, Dependency = $D>, $D: ResolvableFromContainer<C>,)*
                   C: Container
         {
             type Dependency = ($($D,)*);
@@ -59,10 +61,10 @@ impl<T> O<T> {
     }
 }
 
-impl<'scope, C, T, D> Resolvable<C> for O<T>
+impl<C, T, D> Resolvable<C> for O<T>
     where C: Container,
           T: Resolvable<C, Dependency = D>,
-          D: ResolvableFromContainer<'scope, C>
+          D: ResolvableFromContainer<C>
 {
     type Dependency = D;
 
@@ -71,34 +73,23 @@ impl<'scope, C, T, D> Resolvable<C> for O<T>
     }
 }
 
-impl<'scope, C, T, D> ResolvableFromContainer<'scope, C> for O<T>
+impl<C, T, D> ResolvableFromContainer<C> for O<T>
     where C: Container,
           T: Resolvable<C, Dependency = D>,
-          D: ResolvableFromContainer<'scope, C>
+          D: ResolvableFromContainer<C>
 {
-    fn resolve_from_container(container: &'scope C) -> Self {
+    fn resolve_from_container(container: &C) -> Self {
         let d = D::resolve_from_container(container);
         O { t: T::resolve(d) }
     }
 }
 
-/// A root dependency that wraps some other borrowed dependency type.
-pub struct B<'scope, T: 'scope> {
-    t: &'scope T,
-}
-
-impl<'scope, T> B<'scope, T> {
-    pub fn value(self) -> &'scope T {
-        self.t
-    }
-}
-
-impl<'scope, C, T, D> ResolvableFromContainer<'scope, C> for B<'scope, T>
-    where C: BrwScopedContainer<'scope>,
-          T: Resolvable<C, Dependency = D>,
-          D: ResolvableFromContainer<'scope, C>
+impl<C, T, D> ResolvableFromContainer<C> for Rc<Box<T>>
+    where C: ScopedContainer,
+          T: Resolvable<C, Dependency = D> + 'static,
+          D: ResolvableFromContainer<C>
 {
-    fn resolve_from_container(container: &'scope C) -> Self {
-        B { t: container.brw_or_add() }
+    fn resolve_from_container(container: &C) -> Self {
+        container.get_or_add()
     }
 }

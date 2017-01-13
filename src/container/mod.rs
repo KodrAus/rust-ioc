@@ -1,6 +1,8 @@
 mod impls;
 mod brw_scope;
 
+use std::rc::Rc;
+
 pub use self::impls::*;
 pub use self::brw_scope::*;
 
@@ -8,9 +10,9 @@ pub use self::brw_scope::*;
 pub trait Container
     where Self: Sized
 {
-    fn resolve<'scope, D, R>(&'scope self) -> R
+    fn resolve<D, R>(&self) -> R
         where R: Resolvable<Self, Dependency = D>,
-              D: ResolvableFromContainer<'scope, Self>
+              D: ResolvableFromContainer<Self>
     {
         let d = D::resolve_from_container(self);
 
@@ -19,39 +21,29 @@ pub trait Container
 }
 
 /// A trait for creating a new scope and using it within a closure.
-pub trait Scope<'scope> {
+pub trait Scope {
     type Container: Container;
 
-    fn scope<F, T>(&'scope self, f: F) -> T where F: FnOnce(Self::Container) -> T;
+    fn scope<F, T>(&self, f: F) -> T where F: FnOnce(Self::Container) -> T;
 }
 
 /// A scoped container that can resolve shared dependencies.
-pub trait ScopedContainer<'scope>
+pub trait ScopedContainer
     where Self: Container
 {
-    fn get_or_add<T, D>(&'scope self) -> T
-        where T: Resolvable<Self, Dependency = D> + Clone + 'static,
-              D: ResolvableFromContainer<'scope, Self>;
-}
-
-/// A container that can resolve shared dependencies through borrowing.
-pub trait BrwScopedContainer<'scope>
-    where Self: Container
-{
-    fn brw_or_add<'brw, T, D>(&'brw self) -> &'brw T
-        where 'scope: 'brw,
-              T: Resolvable<Self, Dependency = D> + 'scope,
-              D: ResolvableFromContainer<'brw, Self>;
+    fn get_or_add<T, D>(&self) -> Rc<Box<T>>
+        where T: Resolvable<Self, Dependency = D> + 'static,
+              D: ResolvableFromContainer<Self>;
 }
 
 /// A dependency that can be resolved directly from the container.
 ///
 /// This trait is different from `Resolvable` because it doesn't declare
 /// the type of the dependency the implementor requires.
-pub trait ResolvableFromContainer<'scope, C>
+pub trait ResolvableFromContainer<C>
     where C: Container
 {
-    fn resolve_from_container(container: &'scope C) -> Self;
+    fn resolve_from_container(container: &C) -> Self;
 }
 
 /// A dependency that can be resolved.
@@ -67,10 +59,10 @@ pub struct BasicContainer;
 
 impl Container for BasicContainer {}
 
-impl<'scope> Scope<'scope> for BasicContainer {
-    type Container = Scoped<'scope>;
+impl Scope for BasicContainer {
+    type Container = Scoped;
 
-    fn scope<F, T>(&'scope self, f: F) -> T
+    fn scope<F, T>(&self, f: F) -> T
         where F: FnOnce(Self::Container) -> T
     {
         let scope = Scoped::new();

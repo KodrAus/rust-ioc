@@ -3,6 +3,7 @@
 extern crate ioc;
 extern crate test;
 
+use std::rc::Rc;
 use ioc::*;
 use test::{Bencher,black_box};
 
@@ -39,17 +40,17 @@ pub fn resolve_owned_y(b: &mut Bencher) {
 }
 
 #[allow(dead_code)]
-struct BorrowY<'scope> {
+struct BorrowY {
     x: X,
-    y: &'scope Y,
+    y: Rc<Box<Y>>,
 }
-impl<'scope, C> Resolvable<C> for BorrowY<'scope> {
-    type Dependency = (O<X>, B<'scope, Y>);
+impl<C> Resolvable<C> for BorrowY {
+    type Dependency = (O<X>, Rc<Box<Y>>);
 
     fn resolve((x, y): Self::Dependency) -> Self {
         BorrowY {
             x: x.value(),
-            y: y.value(),
+            y: y,
         }
     }
 }

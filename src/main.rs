@@ -7,6 +7,8 @@ extern crate fnv;
 mod container;
 use container::*;
 
+use std::rc::Rc;
+
 #[derive(Debug)]
 struct X;
 impl<C> Resolvable<C> for X {
@@ -77,46 +79,30 @@ impl<C, T> Resolvable<C> for XorY<T> {
 }
 
 #[derive(Debug)]
-struct BorrowY<'scope> {
+struct BorrowY {
     x: X,
-    y: &'scope Y,
+    y: Rc<Box<Y>>,
 }
-impl<'scope, C> Resolvable<C> for BorrowY<'scope> {
-    type Dependency = (O<X>, B<'scope, Y>);
+impl<C> Resolvable<C> for BorrowY {
+    type Dependency = (O<X>, Rc<Box<Y>>);
 
     fn resolve((x, y): Self::Dependency) -> Self {
         BorrowY {
             x: x.value(),
-            y: y.value(),
+            y: y,
         }
     }
 }
 
 #[derive(Debug)]
-struct BorrowMoreY<'scope> {
-    y: &'scope BorrowY<'scope>,
+struct BorrowMoreY {
+    y: Rc<Box<BorrowY>>,
 }
-impl<'scope, C> Resolvable<C> for BorrowMoreY<'scope> {
-    type Dependency = B<'scope, BorrowY<'scope>>;
+impl<C> Resolvable<C> for BorrowMoreY {
+    type Dependency = Rc<Box<BorrowY>>;
 
     fn resolve(y: Self::Dependency) -> Self {
-        BorrowMoreY { y: y.value() }
-    }
-}
-
-#[derive(Debug)]
-struct Unsound {
-    x: X,
-    y: &'static Y,
-}
-impl<C> Resolvable<C> for Unsound {
-    type Dependency = (O<X>, B<'static, Y>);
-
-    fn resolve((x, y): Self::Dependency) -> Self {
-        Unsound {
-            x: x.value(),
-            y: y.value(),
-        }
+        BorrowMoreY { y: y }
     }
 }
 
