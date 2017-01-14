@@ -1,16 +1,12 @@
 # Injector Factories for Rust
 
-> NOTE: This repo won't build on mainline Rust. I'm using a [slightly tweaked `type_id` intrinsic](https://github.com/KodrAus/rust/commit/535d52bae789501bb3b5f0a5d2161cf248c43cd3) that doesn't require a `'static` lifetime.
-
 This is a sandbox for playing around with some dependency injection ideas in the [Rust programming language](https://www.rust-lang-org). Upfront let's not call this _inversion of control_ or _dependency injection_ because it lacks many of the fundamental features of a proper ioc container. What's currently there is a _very_ basic factory pattern that can be used to declare and inject owned or borrowed dependencies without having to know about their dependencies.
 
 ## Soundness
 
-This is currently unsound (actually it fails to build, to avoid being unsound). Unless you have a piece of data with a lifetime to ties things down with it's possible to request a reference that outlives the container. Bad.
+There's an issue with the implementation of borrowed dependencies described below. I've hacked together a quick and dirty solution of using an `Rc<Box<T>>` instead of a straight `&T`. It's a bit of a downer to lose support for language references, but isn't the end of the world. The original solution was technically unsound, and Rust was making it difficult to make that work (as it should).
 
-### The pragmatic solution
-
-Just use `Rc<T>` as the unit for shared data instead of `&T`. It solves all of the issues around fudging lifetimes that are too short or too long. It's not like it's that expensive.
+I think the trait design is fine, and with some attention the boxing of scopes could be made to be better.
 
 ## The gist of it
 
