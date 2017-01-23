@@ -110,6 +110,43 @@ Then you have the classic issue of generics leaking all over your graph. Anyone 
 
 ### Borrowed dependencies
 
+You can borrow dependencies wrapped in a standard `Rc<Box<T>>` where `T` is the dependency. This is a reference counted, heap allocated dependency, so each dependency will point to the same value for the lifetime of the scope it comes from.
+
+These dependencies are borrowed in much the same way as owned ones:
+
+
+```rust
+struct BorrowY {
+	y: Rc<Box<Y>>
+}
+
+impl<C> Resolvable<C> for BorrowY {
+	type Dependency = Rc<Box<Y>>;
+
+	fn resolve(y: Self::Dependency) -> Self {
+		BorrowY { y: y }
+	}
+}
+```
+
+The `Rc` type means an owned reference to a _borrowed_ dependency. This dependency can then be resolved from a scoped container using the same `resolve` method:
+
+```rust
+BasicContainer.scope(|scope| {
+	let y: BorrowY = scope.resolve();
+
+	// do something with y
+});
+```
+
+It's a bit unfortunate to leak the way the dependencies are stored to the user. I'm interested to try loosening the `Box` requirement, so something like an `Rc<RefCell<T>>` could be used without any extra complexity.
+
+To get around the storage, we could look at expressing the dependencies as a trait, and implement that trait for `Rc<T>`. The issue there of course is that the generic trait implementation needs to be carried around with the dependency owner, so there's an ergonomic cost.
+
+### (OLD) Borrowed dependencies
+
+> This section is no longer valid, but I'm keeping it around to show what might've been. It's probably worth revisiting this idea in the future with features like Associated Type Constructors to get a bound on the lifetime of borrowed dependencies, without that bound outliving the scope it comes from.
+
 Dependencies can be borrowed for some lifetime `'a`:
 
 ```rust
@@ -140,11 +177,11 @@ BasicContainer.scope(|scope| {
 
 This is where things start to get interesting. Borrowed dependencies use a special container that implements `ScopedContainer`. The `ScopedContainer` has a `TypeMap` of dependencies so it can hand out borrowed references to them.
 
-All dependencies borrowed for the lifetime of a scope will point to the same instance. For mutable dependencies, something like `Rc<RefCell>` is probably the best bet. I'm not sure how successful I'll be at building `&mut` dependencies.
+All dependencies borrowed for the lifetime of a scope will point to the same instance.
 
 ## Performance
 
-Everything is static dispatch so optimisations abound. Injecting `O<T>` is a _zero-cost abstraction_. For borrowed or scoped dependencies, the cost is in hashing.
+Everything is static dispatch so optimisations abound. Injecting `O<T>` is a _zero-cost abstraction_. For borrowed or scoped dependencies, the cost is in hashing and ref counting.
 
 I forget this every time so am listing the steps I'm using for benchmarking:
 
@@ -159,8 +196,6 @@ $ firefox flame.svg
 
 A lack of non-leaky polymorphism for dependencies is a bit of a downer, but static analysis of the dependency tree is kind of neat. Tradeoffs galore.
 
-This design also requires types to specify the _way_ they want their dependencies, either as owned `O<T>` or borrowed `B<'a, T>`. I'm in two minds about this. On the one hand it's nice to be able to describe exactly the things you require of your dependencies. On the other hand it might not be desirable to force knowledge of where `T` comes from onto its dependents.
+This design also requires types to specify the _way_ they want their dependencies, either as owned `O<T>` or borrowed `Rc<Box<T>>`. I'm in two minds about this. On the one hand it's nice to be able to describe exactly the things you require of your dependencies. On the other hand it might not be desirable to force knowledge of where `T` comes from onto its dependents.
 
-It'd be good if we could work around the one bit of unsafe code in the way borrowed references are materialised from raw pointers. Solving this issue would need some proper design. At the very least we could bound the lifetimes of the returned reference to shorter than that of the scope.
-
-Ultimately, I think this is an interesting experiment and the results are worth exploring.
+Ultimately, I think this is an interesting experiment and the results are worth exploring in more detail.
