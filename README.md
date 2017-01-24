@@ -198,4 +198,8 @@ A lack of non-leaky polymorphism for dependencies is a bit of a downer, but stat
 
 This design also requires types to specify the _way_ they want their dependencies, either as owned `O<T>` or borrowed `Rc<Box<T>>`. I'm in two minds about this. On the one hand it's nice to be able to describe exactly the things you require of your dependencies. On the other hand it might not be desirable to force knowledge of where `T` comes from onto its dependents.
 
-Ultimately, I think this is an interesting experiment and the results are worth exploring in more detail.
+## The verdict
+
+In its current form, it's not possible to introduce this approach to manage dependencies without imposing a specific structure on them (`Rc<Box<T>>`). This is a problem. Unless it's possible to make this work with whatever kind of reference the user asks for it's not really worthwhile.
+
+The issue with borrowed dependencies comes from borrowing data for a lifetime that the scope can't manage. We don't know when any particular dependency will go out of scope so the whole thing falls over. Enhancements to lifetimes may improve this in the future, perhaps with something as simple as a _does not outlive_ bound. That's a reactionary solution though.
