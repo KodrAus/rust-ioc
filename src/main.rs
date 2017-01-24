@@ -82,6 +82,7 @@ impl<C, T> Resolvable<C> for XorY<T> {
 struct BorrowY {
     x: X,
     y: Rc<Box<Y>>,
+    k: &'static str
 }
 impl<C> Resolvable<C> for BorrowY {
     type Dependency = (O<X>, Rc<Box<Y>>);
@@ -90,6 +91,7 @@ impl<C> Resolvable<C> for BorrowY {
         BorrowY {
             x: x.value(),
             y: y,
+            k: "some string value"
         }
     }
 }
