@@ -1,16 +1,12 @@
 # Injector Factories for Rust
 
-> NOTE: This repo won't build on mainline Rust. I'm using a [slightly tweaked `type_id` intrinsic](https://github.com/KodrAus/rust/commit/535d52bae789501bb3b5f0a5d2161cf248c43cd3) that doesn't require a `'static` lifetime.
-
 This is a sandbox for playing around with some dependency injection ideas in the [Rust programming language](https://www.rust-lang-org). Upfront let's not call this _inversion of control_ or _dependency injection_ because it lacks many of the fundamental features of a proper ioc container. What's currently there is a _very_ basic factory pattern that can be used to declare and inject owned or borrowed dependencies without having to know about their dependencies.
 
 ## Soundness
 
-This is currently unsound (actually it fails to build, to avoid being unsound). Unless you have a piece of data with a lifetime to ties things down with it's possible to request a reference that outlives the container. Bad.
+There's an issue with the implementation of borrowed dependencies described below. I've hacked together a quick and dirty solution of using an `Rc<Box<T>>` instead of a straight `&T`. It's a bit of a downer to lose support for language references, but isn't the end of the world. The original solution was technically unsound, and Rust was making it difficult to make that work (as it should).
 
-### The pragmatic solution
-
-Just use `Rc<T>` as the unit for shared data instead of `&T`. It solves all of the issues around fudging lifetimes that are too short or too long. It's not like it's that expensive.
+I think the trait design is fine, and with some attention the boxing of scopes could be made to be better.
 
 ## The gist of it
 
@@ -114,6 +110,43 @@ Then you have the classic issue of generics leaking all over your graph. Anyone 
 
 ### Borrowed dependencies
 
+You can borrow dependencies wrapped in a standard `Rc<Box<T>>` where `T` is the dependency. This is a reference counted, heap allocated dependency, so each dependency will point to the same value for the lifetime of the scope it comes from.
+
+These dependencies are borrowed in much the same way as owned ones:
+
+
+```rust
+struct BorrowY {
+	y: Rc<Box<Y>>
+}
+
+impl<C> Resolvable<C> for BorrowY {
+	type Dependency = Rc<Box<Y>>;
+
+	fn resolve(y: Self::Dependency) -> Self {
+		BorrowY { y: y }
+	}
+}
+```
+
+The `Rc` type means an owned reference to a _borrowed_ dependency. This dependency can then be resolved from a scoped container using the same `resolve` method:
+
+```rust
+BasicContainer.scope(|scope| {
+	let y: BorrowY = scope.resolve();
+
+	// do something with y
+});
+```
+
+It's a bit unfortunate to leak the way the dependencies are stored to the user. I'm interested to try loosening the `Box` requirement, so something like an `Rc<RefCell<T>>` could be used without any extra complexity.
+
+To get around the storage, we could look at expressing the dependencies as a trait, and implement that trait for `Rc<T>`. The issue there of course is that the generic trait implementation needs to be carried around with the dependency owner, so there's an ergonomic cost.
+
+### (OLD) Borrowed dependencies
+
+> This section is no longer valid, but I'm keeping it around to show what might've been. It's probably worth revisiting this idea in the future with features like Associated Type Constructors to get a bound on the lifetime of borrowed dependencies, without that bound outliving the scope it comes from.
+
 Dependencies can be borrowed for some lifetime `'a`:
 
 ```rust
@@ -144,11 +177,11 @@ BasicContainer.scope(|scope| {
 
 This is where things start to get interesting. Borrowed dependencies use a special container that implements `ScopedContainer`. The `ScopedContainer` has a `TypeMap` of dependencies so it can hand out borrowed references to them.
 
-All dependencies borrowed for the lifetime of a scope will point to the same instance. For mutable dependencies, something like `Rc<RefCell>` is probably the best bet. I'm not sure how successful I'll be at building `&mut` dependencies.
+All dependencies borrowed for the lifetime of a scope will point to the same instance.
 
 ## Performance
 
-Everything is static dispatch so optimisations abound. Injecting `O<T>` is a _zero-cost abstraction_. For borrowed or scoped dependencies, the cost is in hashing.
+Everything is static dispatch so optimisations abound. Injecting `O<T>` is a _zero-cost abstraction_. For borrowed or scoped dependencies, the cost is in hashing and ref counting.
 
 I forget this every time so am listing the steps I'm using for benchmarking:
 
@@ -163,8 +196,10 @@ $ firefox flame.svg
 
 A lack of non-leaky polymorphism for dependencies is a bit of a downer, but static analysis of the dependency tree is kind of neat. Tradeoffs galore.
 
-This design also requires types to specify the _way_ they want their dependencies, either as owned `O<T>` or borrowed `B<'a, T>`. I'm in two minds about this. On the one hand it's nice to be able to describe exactly the things you require of your dependencies. On the other hand it might not be desirable to force knowledge of where `T` comes from onto its dependents.
+This design also requires types to specify the _way_ they want their dependencies, either as owned `O<T>` or borrowed `Rc<Box<T>>`. I'm in two minds about this. On the one hand it's nice to be able to describe exactly the things you require of your dependencies. On the other hand it might not be desirable to force knowledge of where `T` comes from onto its dependents.
 
-It'd be good if we could work around the one bit of unsafe code in the way borrowed references are materialised from raw pointers. Solving this issue would need some proper design. At the very least we could bound the lifetimes of the returned reference to shorter than that of the scope.
+## The verdict
 
-Ultimately, I think this is an interesting experiment and the results are worth exploring.
+In its current form, it's not possible to introduce this approach to manage dependencies without imposing a specific structure on them (`Rc<Box<T>>`). This is a problem. Unless it's possible to make this work with whatever kind of reference the user asks for it's not really worthwhile.
+
+The issue with borrowed dependencies comes from borrowing data for a lifetime that the scope can't manage. We don't know when any particular dependency will go out of scope so the whole thing falls over. Enhancements to lifetimes may improve this in the future, perhaps with something as simple as a _does not outlive_ bound. That's a reactionary solution though.
