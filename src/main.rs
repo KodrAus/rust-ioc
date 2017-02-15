@@ -148,13 +148,6 @@ fn main() {
             println!("y count: {}", Rc::strong_count(&y.y));
         }
 
-        // UNSOUND: borrow with a static dependency
-        //let u: Unsound = scope.resolve();
-
         println!("{:?}", z);
     });
-
-    // UNSOUND: resolve a static dependency
-    //let scope = Scoped::new();
-    //let x: &'static X = scope.brw_or_add();
 }

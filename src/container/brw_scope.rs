@@ -7,15 +7,10 @@ use std::hash::BuildHasherDefault;
 use fnv::FnvHasher;
 
 type HashMap<K, V> = StdHashMap<K, V, BuildHasherDefault<FnvHasher>>;
+type DropHandle = Box<Fn(*mut Any) -> ()>;
 
-// TODO: This leaks. We need to find a way to drop values
-// efficiently when the scope is dropped.
-// Maybe we could use unboxed closures, so we have:
-// `HashMap<TypeId, (*mut Any, Fn(*mut Any) -> ())>`.
-// Where the `Fn(*mut Any) -> ()` will convert the pointer into a `Rc<T>`
-// and drop it.
 struct TypeMap {
-    refs: HashMap<TypeId, (*mut Any, Box<Fn(*mut Any) -> ()>)>,
+    refs: HashMap<TypeId, (*mut Any, DropHandle)>,
 }
 
 impl TypeMap {
@@ -35,6 +30,11 @@ impl TypeMap {
         self.refs.get(&Self::key::<T>()).is_some()
     }
 
+    /// Get a shared reference to a dependency.
+    /// 
+    /// This will increment the reference count.
+    /// It will panic if the dependency doesn't already exist so
+    /// call `exists` first, and `insert` if it's not found.
     unsafe fn get<T>(&self) -> Rc<T>
         where T: 'static
     {
@@ -49,6 +49,7 @@ impl TypeMap {
         rc_clone
     }
 
+    /// Insert a dependency into the map.
     fn insert<T>(&mut self, t: T)
         where T: 'static
     {
@@ -59,7 +60,11 @@ impl TypeMap {
             Rc::from_raw(ptr as *mut T);
         });
 
-        self.refs.insert(Self::key::<T>(), (ptr, drop));
+        // add the dependency, dropping any previous value
+        match self.refs.insert(Self::key::<T>(), (ptr, drop)) {
+            Some((ptr, drop)) => drop(ptr),
+            _ => ()
+        }
     }
 }
 
@@ -105,8 +110,6 @@ impl Scoped {
 
 impl Container for Scoped {}
 
-// NOTE: the 'brw here probably isn't doing much, since the T
-// to resolve needs to live for 'scope anyway
 impl ScopedContainer for Scoped {
     fn get_or_add<T, D>(&self) -> Rc<T>
         where T: Resolvable<Self, Dependency = D> + 'static,
