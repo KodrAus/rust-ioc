@@ -1,4 +1,4 @@
-#![feature(core_intrinsics)]
+#![feature(rc_raw)]
 
 extern crate fnv;
 

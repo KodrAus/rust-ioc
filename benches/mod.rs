@@ -21,7 +21,7 @@ struct Y {
     x: X,
 }
 impl<C> Resolvable<C> for Y {
-    type Dependency = O<X>;
+    type Dependency = Owned<X>;
 
     fn resolve(x: Self::Dependency) -> Self {
         Y { x: x.value() }
@@ -42,10 +42,10 @@ pub fn resolve_owned_y(b: &mut Bencher) {
 #[allow(dead_code)]
 struct BorrowY {
     x: X,
-    y: Rc<Box<Y>>,
+    y: Rc<Y>,
 }
 impl<C> Resolvable<C> for BorrowY {
-    type Dependency = (O<X>, Rc<Box<Y>>);
+    type Dependency = (Owned<X>, Rc<Y>);
 
     fn resolve((x, y): Self::Dependency) -> Self {
         BorrowY {

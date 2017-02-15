@@ -31,7 +31,7 @@ pub trait Scope {
 pub trait ScopedContainer
     where Self: Container
 {
-    fn get_or_add<T, D>(&self) -> Rc<Box<T>>
+    fn get_or_add<T, D>(&self) -> Rc<T>
         where T: Resolvable<Self, Dependency = D> + 'static,
               D: ResolvableFromContainer<Self>;
 }
