@@ -15,7 +15,7 @@ type HashMap<K, V> = StdHashMap<K, V, BuildHasherDefault<FnvHasher>>;
 // Where the `Fn(*mut Any) -> ()` will convert the pointer into a `Rc<T>`
 // and drop it.
 struct TypeMap {
-    refs: HashMap<TypeId, *mut Any>,
+    refs: HashMap<TypeId, (*mut Any, Box<Fn(*mut Any) -> ()>)>,
 }
 
 impl TypeMap {
@@ -38,12 +38,12 @@ impl TypeMap {
     unsafe fn get<T>(&self) -> Rc<T>
         where T: 'static
     {
-        let ptr = self.refs.get(&Self::key::<T>()).unwrap();
-        let rc_ptr = *ptr as *mut T;
+        let &(ptr, _) = self.refs.get(&Self::key::<T>()).unwrap();
 
-        let rc = Rc::from_raw(rc_ptr);
+        let rc = Rc::from_raw(ptr as *mut T);
         let rc_clone = rc.clone();
 
+        // forget this Rc again (don't decrement count)
         Rc::into_raw(rc);
 
         rc_clone
@@ -52,10 +52,22 @@ impl TypeMap {
     fn insert<T>(&mut self, t: T)
         where T: 'static
     {
-        let rc_ptr = Rc::into_raw(Rc::new(t));
-        let ptr = rc_ptr as *mut Any;
+        let ptr = Rc::into_raw(Rc::new(t));
 
-        self.refs.insert(Self::key::<T>(), ptr);
+        // a function to drop this Rc
+        let drop = Box::new(|ptr| unsafe {
+            Rc::from_raw(ptr as *mut T);
+        });
+
+        self.refs.insert(Self::key::<T>(), (ptr, drop));
+    }
+}
+
+impl Drop for TypeMap {
+    fn drop(&mut self) {
+        for (_, (ptr, drop)) in self.refs.drain() {
+            drop(ptr);
+        }
     }
 }
 
