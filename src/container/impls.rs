@@ -1,4 +1,3 @@
-use std::ops::Deref;
 use std::rc::Rc;
 use super::*;
 
@@ -84,7 +83,7 @@ impl<C, T, D> ResolvableFromContainer<C> for O<T>
     }
 }
 
-impl<C, T, D> ResolvableFromContainer<C> for Rc<Box<T>>
+impl<C, T, D> ResolvableFromContainer<C> for Rc<T>
     where C: ScopedContainer,
           T: Resolvable<C, Dependency = D> + 'static,
           D: ResolvableFromContainer<C>

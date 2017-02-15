@@ -1,6 +1,4 @@
-#![feature(core_intrinsics)]
-
-// NOTE: Working with a fork of libcore where TypeId doesn't have to be static
+#![feature(rc_raw)]
 
 extern crate fnv;
 
@@ -81,11 +79,11 @@ impl<C, T> Resolvable<C> for XorY<T> {
 #[derive(Debug)]
 struct BorrowY {
     x: X,
-    y: Rc<Box<Y>>,
+    y: Rc<Y>,
     k: &'static str
 }
 impl<C> Resolvable<C> for BorrowY {
-    type Dependency = (O<X>, Rc<Box<Y>>);
+    type Dependency = (O<X>, Rc<Y>);
 
     fn resolve((x, y): Self::Dependency) -> Self {
         BorrowY {
@@ -96,12 +94,18 @@ impl<C> Resolvable<C> for BorrowY {
     }
 }
 
+impl Drop for BorrowY {
+    fn drop(&mut self) {
+        println!("dropping BorrowY");
+    }
+}
+
 #[derive(Debug)]
 struct BorrowMoreY {
-    y: Rc<Box<BorrowY>>,
+    y: Rc<BorrowY>,
 }
 impl<C> Resolvable<C> for BorrowMoreY {
-    type Dependency = Rc<Box<BorrowY>>;
+    type Dependency = Rc<BorrowY>;
 
     fn resolve(y: Self::Dependency) -> Self {
         BorrowMoreY { y: y }
@@ -132,17 +136,24 @@ fn main() {
     c.scope(|scope| {
         let z: Z = scope.resolve();
 
-        let y: BorrowMoreY = scope.resolve();
+        {
+            let y: BorrowMoreY = scope.resolve();
+
+            println!("y count: {}", Rc::strong_count(&y.y));
+        }
+        {
+            let y: BorrowMoreY = scope.resolve();
+
+            println!("y count: {}", Rc::strong_count(&y.y));
+        }
 
         // UNSOUND: borrow with a static dependency
         //let u: Unsound = scope.resolve();
 
-        println!("{:?}", y);
         println!("{:?}", z);
     });
 
-    let scope = Scoped::new();
-
     // UNSOUND: resolve a static dependency
+    //let scope = Scoped::new();
     //let x: &'static X = scope.brw_or_add();
 }

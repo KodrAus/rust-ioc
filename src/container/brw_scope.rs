@@ -1,10 +1,7 @@
-// NOTE: This depends on a tweaked `TypeId` that doesn't require `T: 'static`
-
 use super::*;
 
 use std::mem;
 use std::any::{Any, TypeId};
-use std::intrinsics;
 use std::cell::RefCell;
 use std::collections::HashMap as StdHashMap;
 use std::hash::BuildHasherDefault;
@@ -12,8 +9,14 @@ use fnv::FnvHasher;
 
 type HashMap<K, V> = StdHashMap<K, V, BuildHasherDefault<FnvHasher>>;
 
+// TODO: This leaks. We need to find a way to drop values
+// efficiently when the scope is dropped.
+// Maybe we could use unboxed closures, so we have:
+// `HashMap<TypeId, (*mut Any, Fn(*mut Any) -> ())>`.
+// Where the `Fn(*mut Any) -> ()` will convert the pointer into a `Rc<T>`
+// and drop it.
 struct TypeMap {
-    refs: HashMap<TypeId, Rc<Box<Any>>>,
+    refs: HashMap<TypeId, *mut Any>,
 }
 
 impl TypeMap {
@@ -33,19 +36,27 @@ impl TypeMap {
         self.refs.get(&Self::key::<T>()).is_some()
     }
 
-    unsafe fn get<T>(&self) -> Rc<Box<T>>
+    unsafe fn get<T>(&self) -> Rc<T>
         where T: 'static
     {
-        let rc = self.refs.get(&Self::key::<T>()).unwrap().clone();
-        
-        mem::transmute(rc)
+        let ptr = self.refs.get(&Self::key::<T>()).unwrap();
+        let rc_ptr = *ptr as *mut T;
+
+        let rc = Rc::from_raw(rc_ptr);
+        let rc_clone = rc.clone();
+
+        Rc::into_raw(rc);
+
+        rc_clone
     }
 
     fn insert<T>(&mut self, t: T)
         where T: 'static
     {
-        let rc: Rc<Box<Any>> = Rc::new(Box::new(t));
-        self.refs.insert(Self::key::<T>(), rc);
+        let rc_ptr = Rc::into_raw(Rc::new(t));
+        let ptr = rc_ptr as *mut Any;
+
+        self.refs.insert(Self::key::<T>(), ptr);
     }
 }
 
@@ -67,7 +78,7 @@ impl Scoped {
     }
 
     #[inline]
-    unsafe fn get<T>(&self) -> Rc<Box<T>>
+    unsafe fn get<T>(&self) -> Rc<T>
         where T: 'static
     {
         self.map.borrow().get::<T>()
@@ -86,7 +97,7 @@ impl Container for Scoped {}
 // NOTE: the 'brw here probably isn't doing much, since the T
 // to resolve needs to live for 'scope anyway
 impl ScopedContainer for Scoped {
-    fn get_or_add<T, D>(&self) -> Rc<Box<T>>
+    fn get_or_add<T, D>(&self) -> Rc<T>
         where T: Resolvable<Self, Dependency = D> + 'static,
               D: ResolvableFromContainer<Self>
     {
