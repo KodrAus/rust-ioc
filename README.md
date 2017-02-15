@@ -4,7 +4,7 @@ This is a sandbox for playing around with some dependency injection ideas in the
 
 ## Soundness
 
-There's an issue with the implementation of borrowed dependencies described below. I've hacked together a quick and dirty solution of using an `Rc<Box<T>>` instead of a straight `&T`. It's a bit of a downer to lose support for language references, but isn't the end of the world. The original solution was technically unsound, and Rust was making it difficult to make that work (as it should).
+The original design used `&T` for borrowed dependencies, but this had a soundness issue that allowed callers to request data that lived longer than the container. I've hacked together a solution of using an `Rc<T>` instead of a straight `&T`. On the surface this seems unfortunate; lifetimes can't help me solve a problem that seems purely about lifetimes. It's not such an issue when you think about it though. Reference counting is a simple and effective mechanism for handling dynamic lifetimes. It means you could also depend on an `Rc<RefCell<T>>` for shared mutable references, which wouldn't be possible with an `&T`.
 
 I think the trait design is fine, and with some attention the boxing of scopes could be made to be better.
 
@@ -54,7 +54,7 @@ struct Y {
 }
 
 impl<C> Resolvable<C> for Y {
-    type Dependency = O<X>;
+    type Dependency = Owned<X>;
 
     fn resolve(x: Self::Dependency) -> Self {
         Y { x: x.value() }
@@ -62,7 +62,7 @@ impl<C> Resolvable<C> for Y {
 }
 ```
 
-The `O<T>` type means an _owned_ dependency. Maybe one day it'll be called `Owned<T>`, but I was in a terse mood when I wrote it so it's `O`.
+The `Owned<T>` type means an _owned_ dependency.
 
 And a struct `Z` that depends on both `X` and `Y` can be marked as `Resolvable` with a dependency on `(X, Y)`:
 
@@ -73,7 +73,7 @@ struct Z {
 }
 
 impl<C> Resolvable<C> for Z {
-    type Dependency = (O<X>, O<Y>);
+    type Dependency = (Owned<X>, Owned<Y>);
 
     fn resolve((x, y): Self::Dependency) -> Self {
         Z {
@@ -96,7 +96,7 @@ struct D<T> {
 }
 
 impl<C, T> Resolvable<C> for D<T> {
-    type Dependency = O<T>;
+    type Dependency = Owned<T>;
 
     fn resolve(t: Self::Dependency) -> Self {
         D {
@@ -110,18 +110,18 @@ Then you have the classic issue of generics leaking all over your graph. Anyone 
 
 ### Borrowed dependencies
 
-You can borrow dependencies wrapped in a standard `Rc<Box<T>>` where `T` is the dependency. This is a reference counted, heap allocated dependency, so each dependency will point to the same value for the lifetime of the scope it comes from.
+You can borrow dependencies wrapped in a standard `Rc<T>` where `T` is the dependency. This is a reference counted, heap allocated dependency, so each dependency will point to the same value for the lifetime of the scope it comes from.
 
 These dependencies are borrowed in much the same way as owned ones:
 
 
 ```rust
 struct BorrowY {
-	y: Rc<Box<Y>>
+	y: Rc<Y>
 }
 
 impl<C> Resolvable<C> for BorrowY {
-	type Dependency = Rc<Box<Y>>;
+	type Dependency = Rc<Y>;
 
 	fn resolve(y: Self::Dependency) -> Self {
 		BorrowY { y: y }
@@ -129,7 +129,7 @@ impl<C> Resolvable<C> for BorrowY {
 }
 ```
 
-The `Rc` type means an owned reference to a _borrowed_ dependency. This dependency can then be resolved from a scoped container using the same `resolve` method:
+The `Rc<T>` type means an owned reference to a _borrowed_ dependency, tracking using reference counting. This dependency can then be resolved from a scoped container using the same `resolve` method:
 
 ```rust
 BasicContainer.scope(|scope| {
@@ -139,13 +139,9 @@ BasicContainer.scope(|scope| {
 });
 ```
 
-It's a bit unfortunate to leak the way the dependencies are stored to the user. I'm interested to try loosening the `Box` requirement, so something like an `Rc<RefCell<T>>` could be used without any extra complexity.
-
-To get around the storage, we could look at expressing the dependencies as a trait, and implement that trait for `Rc<T>`. The issue there of course is that the generic trait implementation needs to be carried around with the dependency owner, so there's an ergonomic cost.
-
 ### (OLD) Borrowed dependencies
 
-> This section is no longer valid, but I'm keeping it around to show what might've been. It's probably worth revisiting this idea in the future with features like Associated Type Constructors to get a bound on the lifetime of borrowed dependencies, without that bound outliving the scope it comes from.
+> This section is no longer valid, but I'm keeping it around to show what might've been. It's probably worth revisiting this idea in the future with features like Associated Type Constructors to get a bound on the lifetime of borrowed dependencies, without that bound outliving the scope it comes from. I've grown on the `Rc` implementation though, because it gives us possible mutability too.
 
 Dependencies can be borrowed for some lifetime `'a`:
 
@@ -181,7 +177,7 @@ All dependencies borrowed for the lifetime of a scope will point to the same ins
 
 ## Performance
 
-Everything is static dispatch so optimisations abound. Injecting `O<T>` is a _zero-cost abstraction_. For borrowed or scoped dependencies, the cost is in hashing and ref counting.
+Everything is static dispatch so optimisations abound. Injecting `Owned<T>` is a _zero-cost abstraction_. For borrowed or scoped dependencies, the cost is in hashing and ref counting. There are 2 heap allocations per shared dependency; the dependency itself and a boxed closure that runs on drop.
 
 I forget this every time so am listing the steps I'm using for benchmarking:
 
@@ -196,10 +192,14 @@ $ firefox flame.svg
 
 A lack of non-leaky polymorphism for dependencies is a bit of a downer, but static analysis of the dependency tree is kind of neat. Tradeoffs galore.
 
-This design also requires types to specify the _way_ they want their dependencies, either as owned `O<T>` or borrowed `Rc<Box<T>>`. I'm in two minds about this. On the one hand it's nice to be able to describe exactly the things you require of your dependencies. On the other hand it might not be desirable to force knowledge of where `T` comes from onto its dependents.
+This design also requires types to specify the _way_ they want their dependencies, either as owned `Owned<T>` or borrowed `Rc<T>`. I'm in two minds about this. On the one hand it's nice to be able to describe exactly the things you require of your dependencies. On the other hand it might not be desirable to force knowledge of where `T` comes from onto its dependents.
+
+It's also important to note that `Owned<T>`, `Rc<T>` and `Rc<RefCell<T>>` are distinct types, and each will recieve a different instance of `T`. This is reasonable when you think about it, but means a caller also needs to consider how much isolation they need for their dependencies. With other dependency injection solutions users don't need to worry about dependency storage or ownership, wheras here we need both. That may not necessarily be a bad thing, but the result of an `Rc<T>` not observing changes made to an `Rc<RefCell<T>>` may be surprising.
+
+So overall, the design is pretty leaky in a few ways, but that could be justified by calling it 'flexibility'.
 
 ## The verdict
 
-In its current form, it's not possible to introduce this approach to manage dependencies without imposing a specific structure on them (`Rc<Box<T>>`). This is a problem. Unless it's possible to make this work with whatever kind of reference the user asks for it's not really worthwhile.
+In its current form, it's not possible to introduce this approach to manage dependencies without imposing a specific structure on them (`Rc<T>`) and forcing questions of ownership on the user. This is a bit of a problem, but could be solved in some sense by forcing an `Rc<RefCell<T>>` on everyone. Resolving the dependency graph at compile-time is pretty neat though, and catching things like missing dependencies and cycles, which should also prevent issues with `Rc` leaking due to cycles.
 
 The issue with borrowed dependencies comes from borrowing data for a lifetime that the scope can't manage. We don't know when any particular dependency will go out of scope so the whole thing falls over. Enhancements to lifetimes may improve this in the future, perhaps with something as simple as a _does not outlive_ bound. That's a reactionary solution though.
