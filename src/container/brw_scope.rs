@@ -1,6 +1,5 @@
 use super::*;
 
-use std::mem;
 use std::any::{Any, TypeId};
 use std::cell::RefCell;
 use std::collections::HashMap as StdHashMap;

@@ -144,6 +144,7 @@ fn main() {
         {
             let y: BorrowMoreY = scope.resolve();
 
+            println!("{:?}", y);
             println!("y count: {}", Rc::strong_count(&y.y));
         }
 
