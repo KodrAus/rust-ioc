@@ -24,10 +24,10 @@ struct Y {
     i: i32
 }
 impl<C> Resolvable<C> for Y {
-    type Dependency = Owned<X>;
+    type Dependency = RefCell<X>;
 
     fn resolve(x: Self::Dependency) -> Self {
-        Y { x: x.value(), i: 1 }
+        Y { x: x.into_inner(), i: 1 }
     }
 }
 
@@ -37,12 +37,12 @@ struct Z {
     y: Y,
 }
 impl<C> Resolvable<C> for Z {
-    type Dependency = (Owned<X>, Owned<Y>);
+    type Dependency = (RefCell<X>, RefCell<Y>);
 
     fn resolve((x, y): Self::Dependency) -> Self {
         Z {
-            x: x.value(),
-            y: y.value(),
+            x: x.into_inner(),
+            y: y.into_inner(),
         }
     }
 }
@@ -54,14 +54,14 @@ struct XYZ {
     z: Z,
 }
 impl<C> Resolvable<C> for XYZ {
-    // NOTE: `(Owned<X>, (Owned<Y>, Owned<Z>))` would also work
-    type Dependency = (Owned<X>, Owned<Y>, Owned<Z>);
+    // NOTE: `(RefCell<X>, (RefCell<Y>, RefCell<Z>))` would also work
+    type Dependency = (RefCell<X>, RefCell<Y>, RefCell<Z>);
 
     fn resolve((x, y, z): Self::Dependency) -> Self {
         XYZ {
-            x: x.value(),
-            y: y.value(),
-            z: z.value(),
+            x: x.into_inner(),
+            y: y.into_inner(),
+            z: z.into_inner(),
         }
     }
 }
@@ -71,10 +71,10 @@ struct XorY<T> {
     t: T,
 }
 impl<C, T> Resolvable<C> for XorY<T> {
-    type Dependency = Owned<T>;
+    type Dependency = RefCell<T>;
 
     fn resolve(t: Self::Dependency) -> Self {
-        XorY { t: t.value() }
+        XorY { t: t.into_inner() }
     }
 }
 
@@ -85,11 +85,11 @@ struct BorrowY {
     k: &'static str
 }
 impl<C> Resolvable<C> for BorrowY {
-    type Dependency = (Owned<X>, Rc<Y>);
+    type Dependency = (RefCell<X>, Rc<Y>);
 
     fn resolve((x, y): Self::Dependency) -> Self {
         BorrowY {
-            x: x.value(),
+            x: x.into_inner(),
             y: y,
             k: "some string value"
         }

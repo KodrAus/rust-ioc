@@ -4,6 +4,7 @@ extern crate ioc;
 extern crate test;
 
 use std::rc::Rc;
+use std::cell::RefCell;
 use ioc::*;
 use test::{Bencher,black_box};
 
@@ -21,10 +22,10 @@ struct Y {
     x: X,
 }
 impl<C> Resolvable<C> for Y {
-    type Dependency = Owned<X>;
+    type Dependency = RefCell<X>;
 
     fn resolve(x: Self::Dependency) -> Self {
-        Y { x: x.value() }
+        Y { x: x.into_inner() }
     }
 }
 
@@ -45,11 +46,11 @@ struct BorrowY {
     y: Rc<Y>,
 }
 impl<C> Resolvable<C> for BorrowY {
-    type Dependency = (Owned<X>, Rc<Y>);
+    type Dependency = (RefCell<X>, Rc<Y>);
 
     fn resolve((x, y): Self::Dependency) -> Self {
         BorrowY {
-            x: x.value(),
+            x: x.into_inner(),
             y: y,
         }
     }

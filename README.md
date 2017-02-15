@@ -54,15 +54,15 @@ struct Y {
 }
 
 impl<C> Resolvable<C> for Y {
-    type Dependency = Owned<X>;
+    type Dependency = RefCell<X>;
 
     fn resolve(x: Self::Dependency) -> Self {
-        Y { x: x.value() }
+        Y { x: x.into_inner() }
     }
 }
 ```
 
-The `Owned<T>` type means an _owned_ dependency.
+The `RefCell<T>` type means an _owned_ dependency. Actually it means a dependency with _interior mutability_, but when you've got exclusive ownership of the `RefCell` it doesn't really matter.
 
 And a struct `Z` that depends on both `X` and `Y` can be marked as `Resolvable` with a dependency on `(X, Y)`:
 
@@ -73,12 +73,12 @@ struct Z {
 }
 
 impl<C> Resolvable<C> for Z {
-    type Dependency = (Owned<X>, Owned<Y>);
+    type Dependency = (RefCell<X>, RefCell<Y>);
 
     fn resolve((x, y): Self::Dependency) -> Self {
         Z {
-            x: x.value(),
-            y: y.value(),
+            x: x.into_inner(),
+            y: y.into_inner(),
         }
     }
 }
@@ -96,11 +96,11 @@ struct D<T> {
 }
 
 impl<C, T> Resolvable<C> for D<T> {
-    type Dependency = Owned<T>;
+    type Dependency = RefCell<T>;
 
     fn resolve(t: Self::Dependency) -> Self {
         D {
-            t: t.value(),
+            t: t.into_inner(),
         }
     }
 }
@@ -155,7 +155,7 @@ impl<'a, C> Resolvable<C> for BorrowY<'a> {
 
 	fn resolve(y: Self::Dependency) -> Self {
 		BorrowY {
-			y: y.value()
+			y: y.into_inner()
 		}
 	}
 }
@@ -177,7 +177,7 @@ All dependencies borrowed for the lifetime of a scope will point to the same ins
 
 ## Performance
 
-Everything is static dispatch so optimisations abound. Injecting `Owned<T>` is a _zero-cost abstraction_. For borrowed or scoped dependencies, the cost is in hashing and ref counting. There are 2 heap allocations per shared dependency; the dependency itself and a boxed closure that runs on drop.
+Everything is static dispatch so optimisations abound. Injecting `RefCell<T>` is a _zero-cost abstraction_. For borrowed or scoped dependencies, the cost is in hashing and ref counting. There are 2 heap allocations per shared dependency; the dependency itself and a boxed closure that runs on drop.
 
 I forget this every time so am listing the steps I'm using for benchmarking:
 
@@ -192,9 +192,9 @@ $ firefox flame.svg
 
 A lack of non-leaky polymorphism for dependencies is a bit of a downer, but static analysis of the dependency tree is kind of neat. Tradeoffs galore.
 
-This design also requires types to specify the _way_ they want their dependencies, either as owned `Owned<T>` or borrowed `Rc<T>`. I'm in two minds about this. On the one hand it's nice to be able to describe exactly the things you require of your dependencies. On the other hand it might not be desirable to force knowledge of where `T` comes from onto its dependents.
+This design also requires types to specify the _way_ they want their dependencies, either as owned `RefCell<T>` or borrowed `Rc<T>`. I'm in two minds about this. On the one hand it's nice to be able to describe exactly the things you require of your dependencies. On the other hand it might not be desirable to force knowledge of where `T` comes from onto its dependents.
 
-It's also important to note that `Owned<T>`, `Rc<T>` and `Rc<RefCell<T>>` are distinct types, and each will recieve a different instance of `T`. This is reasonable when you think about it, but means a caller also needs to consider how much isolation they need for their dependencies. With other dependency injection solutions users don't need to worry about dependency storage or ownership, wheras here we need both. That may not necessarily be a bad thing, but the result of an `Rc<T>` not observing changes made to an `Rc<RefCell<T>>` may be surprising.
+It's also important to note that `RefCell<T>`, `Rc<T>` and `Rc<RefCell<T>>` are distinct types, and each will recieve a different instance of `T`. This is reasonable when you think about it, but means a caller also needs to consider how much isolation they need for their dependencies. With other dependency injection solutions users don't need to worry about dependency storage or ownership, wheras here we need both. That may not necessarily be a bad thing, but the result of an `Rc<T>` not observing changes made to an `Rc<RefCell<T>>` may be surprising.
 
 So overall, the design is pretty leaky in a few ways, but that could be justified by calling it 'flexibility'.
 

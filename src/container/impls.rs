@@ -4,13 +4,11 @@
 //! 
 //! - `()` the only _true_ root dependency that can be used for types
 //! that can be materialised from nothing.
-//! - `Owned<T>` a unique instance of `T`.
 //! - `Rc<T>` a shared instance of `T`.
-//! - `RefCell<T>` a mutable instance of `T`.
+//! - `RefCell<T>` a unique instance of `T`.
 //! 
 //! These can be combined in various ways, like `Rc<RefCell<T>>`.
-//! The trait bounds might be tightened up though, since `Rc<Owned<T>>`,
-//! `Owned<()>` and `RefCell<T>` alone don't make much sense.
+//! They can also be combined in pointless ways, like `Rc<()>`.
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -60,44 +58,8 @@ resolve_tuple!((T1, D1, d1)(T2, D2, d2)(T3, D3, d3));
 resolve_tuple!((T1, D1, d1)(T2, D2, d2)(T3, D3, d3)(T4, D4, d4));
 resolve_tuple!((T1, D1, d1)(T2, D2, d2)(T3, D3, d3)(T4, D4, d4)(T5, D5, d5));
 
-/// A root dependency that wraps some other owned dependency type.
-///
-/// `Owned` makes it possible to implement `ResolvableFromContainer` for any
-/// arbitrary `Resolvable` without colliding with other root dependency
-/// implementations.
-pub struct Owned<T> {
-    t: T,
-}
-
-impl<T> Owned<T> {
-    pub fn value(self) -> T {
-        self.t
-    }
-}
-
-impl<C, T, D> Resolvable<C> for Owned<T>
-    where C: Container,
-          T: Resolvable<C, Dependency = D>,
-          D: ResolvableFromContainer<C>
-{
-    type Dependency = D;
-
-    fn resolve(dependency: D) -> Self {
-        Owned { t: T::resolve(dependency) }
-    }
-}
-
-impl<C, T, D> ResolvableFromContainer<C> for Owned<T>
-    where C: Container,
-          T: Resolvable<C, Dependency = D>,
-          D: ResolvableFromContainer<C>
-{
-    fn resolve_from_container(container: &C) -> Self {
-        let d = D::resolve_from_container(container);
-        Owned { t: T::resolve(d) }
-    }
-}
-
+// `RefCell`s are unique dependencies. Each request will return a new instance.
+// For sharing, use an `Rc<T>` or `Rc<RefCell<T>>`.
 impl<C, T, D> Resolvable<C> for RefCell<T>
     where C: Container,
           T: Resolvable<C, Dependency = D>,
@@ -117,10 +79,14 @@ impl<C, T, D> ResolvableFromContainer<C> for RefCell<T>
 {
     fn resolve_from_container(container: &C) -> Self {
         let d = D::resolve_from_container(container);
+        
         RefCell::new(T::resolve(d))
     }
 }
 
+// `Rc`s are shared dependencies. Each request will return a pointer to the
+// same instance.
+// For shared, mutable dependencies use `Rc<RefCell<T>>`.
 impl<C, T, D> ResolvableFromContainer<C> for Rc<T>
     where C: ScopedContainer,
           T: Resolvable<C, Dependency = D> + 'static,
