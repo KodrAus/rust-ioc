@@ -53,7 +53,7 @@ impl TypeMap {
     fn insert<T>(&mut self, t: T)
         where T: 'static
     {
-        let ptr = Rc::into_raw(Rc::new(t));
+        let ptr = Rc::into_raw(Rc::new(t)) as *mut T;
 
         // a function to drop this Rc
         let drop = Box::new(|ptr| unsafe {
