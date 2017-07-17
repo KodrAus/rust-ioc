@@ -203,3 +203,7 @@ So overall, the design is pretty leaky in a few ways, but that could be justifie
 In its current form, it's not possible to introduce this approach to manage dependencies without imposing a specific structure on them (`Rc<T>`) and forcing questions of ownership on the user. This is a bit of a problem, but could be solved in some sense by forcing an `Rc<RefCell<T>>` on everyone. Resolving the dependency graph at compile-time is pretty neat though, and catching things like missing dependencies and cycles, which should also prevent issues with `Rc` leaking due to cycles.
 
 The issue with borrowed dependencies comes from borrowing data for a lifetime that the scope can't manage. We don't know when any particular dependency will go out of scope so the whole thing falls over. Enhancements to lifetimes may improve this in the future, perhaps with something as simple as a _does not outlive_ bound. That's a reactionary solution though.
+
+# What else can we do?
+
+I'm playing with some alternative ideas for separating injection boilerplate from app logic without needing a framework to do it for you (because we don't have one anyways). We can take inspiration from functional languages and the fact that functions are first-class types in Rust. This idea lives in the `factories` folder.
