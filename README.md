@@ -1,6 +1,6 @@
 # Injector Factories for Rust
 
-This is a sandbox for playing around with some dependency injection ideas in the [Rust programming language](https://www.rust-lang-org). Upfront let's not call this _inversion of control_ or _dependency injection_ because it lacks many of the fundamental features of a proper ioc container. What's currently there is a _very_ basic factory pattern that can be used to declare and inject owned or borrowed dependencies without having to know about their dependencies.
+This is a sandbox for playing around with some dependency injection ideas in the [Rust programming language](https://www.rust-lang-org). Upfront let's not call this _inversion of control_ because it lacks many of the fundamental features of a proper ioc container. What's currently there is a _very_ basic factory pattern that can be used to declare and inject owned or borrowed dependencies without having to know about their dependencies.
 
 ## Soundness
 
@@ -204,6 +204,33 @@ In its current form, it's not possible to introduce this approach to manage depe
 
 The issue with borrowed dependencies comes from borrowing data for a lifetime that the scope can't manage. We don't know when any particular dependency will go out of scope so the whole thing falls over. Enhancements to lifetimes may improve this in the future, perhaps with something as simple as a _does not outlive_ bound. That's a reactionary solution though.
 
-# What else can we do?
+# Dependency Injection without a framework
 
 I'm playing with some alternative ideas for separating injection boilerplate from app logic without needing a framework to do it for you (because we don't have one anyways). We can take inspiration from functional languages and the fact that functions are first-class types in Rust. This idea lives in the `factories` folder.
+
+## What do we want to do?
+Describe a dependency graph without having to specify implementations of things. One of the tricky things about Rust is that neither trait objects nor generics are as ergonomic as interfaces in other languages. It just doesn't work that way.
+
+So how can we achieve loose coupling and good testability without interfaces? Without sacrificing ergonomics? Can we use factories or something to resolve dependencies? Will these factories be any more useful than just using generics? Generics are more problematic because we need to use phantom data.
+
+What if we take a different approach? And separate ambient state from application state? That is, separate the state we work on from the state we work on it with? Sounds pretty obvious, but maybe it's worth calling out? You don't _need_ to have separate objects to implement functionality. Is that something to consider?
+
+The idea is:
+- We don't rely on the fact that there's a single concrete implementation of a thing
+- But we have a single concrete implementation of a thing for convenience
+
+Pass the required types to a function as generics. What do we want to do?
+
+This pattern relies on the fact that closures are generated for you with their inputs, and that you can implement arbitrary traits for closures.
+
+### Separate implementation inputs from action inputs
+
+#### Why?
+
+So we can execute the same logic with different implementations, or use the same implementations multiple times. We have functions, so why not use them? Is there a more ergonomic way to separate boilerplate from app logic? Is the glue between services part of the app logic? I'd say yes, and we should treat it as such. But is it less useful to compose smaller commands? Is it a separate 'command' when it's not pure?
+
+### Separate impure commands from pure ones
+
+#### Why?
+
+So we can test the impure code independently, and how it affects the pure code. How will this compose? We need to write a test app that uses different kinds of things and see. The point is not to build abstractions unless they're useful. The use we're getting here is separating injection from execution. The pattern is to have common plumbing that tests and APIs and CLIs etc can run through.
