@@ -208,6 +208,8 @@ The issue with borrowed dependencies comes from borrowing data for a lifetime th
 
 I'm playing with some alternative ideas for separating injection boilerplate from app logic without needing a framework to do it for you (because we don't have one anyways). We can take inspiration from functional languages and the fact that functions are first-class types in Rust. This idea lives in the `factories` folder.
 
+> **NOTE:** What follows are incoherent ramblings of half-whispered patterns.
+
 ## What do we want to do?
 Describe a dependency graph without having to specify implementations of things. One of the tricky things about Rust is that neither trait objects nor generics are as ergonomic as interfaces in other languages. It just doesn't work that way.
 
