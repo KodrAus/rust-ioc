@@ -51,14 +51,14 @@ struct SetProductTitle {
 }
 
 trait SetProductTitleCommand {
-    fn set_product_title(&self, action: SetProductTitle) -> Result<(), String>;
+    fn set_product_title(self, action: SetProductTitle) -> Result<(), String>;
 }
 
 // Any function can be a `SetProductTitleCommand`
 impl<F> SetProductTitleCommand for F 
-    where F: Fn(SetProductTitle) -> Result<(), String>
+    where F: FnOnce(SetProductTitle) -> Result<(), String>
 {
-    fn set_product_title(&self, action: SetProductTitle) -> Result<(), String> {
+    fn set_product_title(self, action: SetProductTitle) -> Result<(), String> {
         self(action)
     }
 }
